@@ -1,6 +1,6 @@
-package com.nolanbarry.gateway.protocol
+package com.nolanbarry.gateway.delegates
 
-import com.nolanbarry.gateway.SOCKET_SELECTOR
+import com.nolanbarry.gateway.model.SOCKET_SELECTOR
 import com.nolanbarry.gateway.model.ServerStatus
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.network.sockets.*
@@ -22,7 +22,7 @@ data class ServerDelegateConfig(
 )
 
 abstract class ServerDelegate(config: ServerDelegateConfig) {
-    private val port = config.port
+    val port = config.port
     private val timeout = config.timeout
     private val pingInterval = config.pingInterval
     private val protocolVersion = config.protocolVersion
@@ -47,7 +47,7 @@ abstract class ServerDelegate(config: ServerDelegateConfig) {
         else if (!stopped && desiredState == ServerState.STOPPED) stopServer()
     }
 
-    private suspend fun openSocket(): Socket = coroutineScope {
+    suspend fun openSocket(): Socket = coroutineScope {
         waitForServerToBe(ServerState.STARTED)
         val address = getServerAddress()
         val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, port)

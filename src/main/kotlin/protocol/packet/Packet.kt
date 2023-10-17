@@ -1,67 +1,108 @@
 package com.nolanbarry.gateway.protocol.packet
 
-import kotlin.reflect.KClass
+import com.nolanbarry.gateway.model.ServerStatus
+import java.nio.BufferUnderflowException
+import java.nio.ByteBuffer
+import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.primaryConstructor
 
 typealias VarInt = Int
 
-abstract class Packet {
-    open var id: Int = 0
-    open lateinit var payload: List<Byte>
-}
-
-data class RawPacket (
-    override var id: VarInt,
-    /** Unparsed information unique to this packet */
-    override var payload: List<Byte>
-): Packet {
-    /** Total length of the entire packet (including the bytes describing the length of the id and payload) */
-    val totalLength: Int = payload.size + Field.VarInt.encode(id).size
-
-    fun <T: Packet> interpretAs(packetType: KClass<T>): T {
-        val definition = packetType.primaryConstructor!!.parameters
-        val offset = Offset()
-        val parameters: List<Any> = definition.map { field ->
-            when (val type = field.type.classifier) {
-                VarInt::class -> Field.VarInt.parse(payload, offset)
-                String::class -> Field.String.parse(payload, offset)
-                UByte::class -> Field.UnsignedByte.parse(payload, offset)
-                UShort::class -> Field.UnsignedShort.parse(payload, offset)
-                Long::class -> Field.Long.parse(payload, offset)
-                else -> throw IllegalArgumentException("Unknown field $type")
+data class Packet<P: Any> (
+    val id: VarInt,
+    val payload: P
+) {
+    fun encode(): ByteBuffer {
+        val definition = payload::class.memberProperties.map {
+                prop -> prop.call() ?: throw IllegalArgumentException("Packet property ${prop.name} is null")
+        }
+        val buffers = definition.map { field ->
+            when (field) {
+                is VarInt -> Field.VarInt.encode(field)
+                is String -> Field.String.encode(field)
+                is UByte -> Field.UnsignedByte.encode(field)
+                is UShort -> Field.UnsignedShort.encode(field)
+                is ULong -> Field.UnsignedLong.encode(field)
+                is Long -> Field.SignedLong.encode(field)
+                else -> Field.Json.encode(field)
             }
         }
-        val packet = packetType.primaryConstructor!!.call(*parameters.toTypedArray())
-        packet.id = id
-        packet.payload = payload
-        return packet
+        val idBuffer = Field.VarInt.encode(id)
+        val packetSize = buffers.sumOf { buff -> buff.limit() } + idBuffer.limit()
+        val sizeBuffer = Field.VarInt.encode(packetSize)
+        val concatenated = ByteBuffer.allocate(sizeBuffer.limit() + packetSize).put(sizeBuffer)
+        buffers.forEach { buff -> concatenated.put(buff) }
+        return concatenated
     }
 }
 
-object ClientPacketSchema {
+data class RawPacket (
+    val id: VarInt,
+    /** Unparsed information unique to this packet */
+    val payload: ByteBuffer
+) {
+
+    /** Formatted id */
+    val fid = "0x${id.toString(16)}"
+
+    companion object {
+        /** Read a `RawPacket` from the beginning (position 0) of the buffer. If the buffer doesn't contain an entire packet,
+         * returns `null`. If a packet is returned, the passed buffer's position will be set to the next byte after the packet. */
+        fun from(buffer: ByteBuffer): RawPacket? {
+            val window = buffer.asReadOnlyBuffer().position(0)
+            try {
+                parseLegacyServerListPing(window)?.apply { return this }
+
+                val payloadLength = Field.VarInt.parse(window)
+                val actualPayloadLength = payloadLength - window.position()
+                val id = Field.VarInt.parse(window)
+
+                val payload = ByteBuffer.allocate(actualPayloadLength)
+                repeat(actualPayloadLength) { payload.put(window.get()) }
+
+                buffer.position(window.position())
+                return RawPacket(id, payload)
+            } catch (e: Exception) {
+                if (e is BufferUnderflowException) return null
+                else throw e
+            }
+        }
+    }
+
+    inline fun <reified T : Any>  interpretAs(): Packet<T> {
+        val definition = T::class.primaryConstructor!!.parameters
+        val parameters: List<Any> = definition.map { field ->
+            when (field.type.classifier) {
+                VarInt::class -> Field.VarInt.parse(payload)
+                String::class -> Field.String.parse(payload)
+                UByte::class -> Field.UnsignedByte.parse(payload)
+                UShort::class -> Field.UnsignedShort.parse(payload)
+                ULong::class -> Field.UnsignedLong.parse(payload)
+                Long::class -> Field.SignedLong.parse(payload)
+                else -> Field.Json.parse(payload)
+            }
+        }
+
+        return Packet(
+            id = this.id,
+            T::class.primaryConstructor!!.call(*parameters.toTypedArray<Any>())
+        )
+    }
+}
+
+object Client {
     data class Handshake(
         val protocolVersion: VarInt,
         val serverAddress: String,
         val serverPort: UShort,
         val nextState: VarInt
-    ) : Packet()
-    class StatusRequest : Packet()
-    data class PingRequest(val pingPayload: Long) : Packet()
+    )
+    class StatusRequest
+    data class PingRequest(val pingPayload: Long)
 }
 
-object ServerPacketSchema {
-    data class StatusResponse(val response: String) : Packet()
-    data class PingResponse(val pingPayload: Long) : Packet()
-}
-
-interface Handshake {
-    val protocolVersion: VarInt
-    val serverAddress: String
-    val serverPort: UShort
-    val nextState: VarInt
-}
-
-val x = object {
-    override get
+object Server {
+    data class StatusResponse(val response: ServerStatus)
+    data class PingResponse(val pingPayload: Long)
 }
 

@@ -1,7 +1,12 @@
-package com.nolanbarry.gateway
+package com.nolanbarry.gateway.model
+
+import com.nolanbarry.gateway.CommandLineArgs
+import com.nolanbarry.gateway.IntParameter
+import com.nolanbarry.gateway.alias
 
 val COMMAND_LINE_CONFIGURATION = CommandLineArgs()
-    .add(IntParameter("port")
+    .add(
+        IntParameter("port")
              .alias("p")
              .default(25565))
 

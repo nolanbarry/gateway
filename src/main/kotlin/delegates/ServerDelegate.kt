@@ -1,5 +1,6 @@
 package com.nolanbarry.gateway.delegates
 
+import com.nolanbarry.gateway.config.Configuration
 import com.nolanbarry.gateway.model.SOCKET_SELECTOR
 import com.nolanbarry.gateway.model.ServerStatus
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -14,23 +15,18 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 import kotlin.time.Duration
 
-data class ServerDelegateConfig(
-    val port: Int,
-    val protocolVersion: String,
-    val timeout: Duration,
-    val pingInterval: Duration
-)
+abstract class ServerDelegate {
+    protected val config = Configuration.gateway
 
-abstract class ServerDelegate(config: ServerDelegateConfig) {
     val port = config.port
-    private val timeout = config.timeout
-    private val pingInterval = config.pingInterval
-    private val protocolVersion = config.protocolVersion
-    private var timeEmpty = Duration.ZERO
-    private val stateTransition = Mutex()
-    private var playerCount = 0
-    private var lastCheckup = Clock.System.now()
-    private val log = KotlinLogging.logger {}
+    protected val timeout = config.timeout
+    protected val pingInterval = config.frequency
+    protected val protocolVersion = config.protocol
+    protected var timeEmpty = Duration.ZERO
+    protected val stateTransition = Mutex()
+    protected var playerCount = 0
+    protected var lastCheckup = Clock.System.now()
+    protected val log = KotlinLogging.logger {}
 
     abstract suspend fun isStarted(): Boolean
     abstract suspend fun isStopped(): Boolean

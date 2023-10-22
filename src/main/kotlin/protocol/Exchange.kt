@@ -1,9 +1,9 @@
 package com.nolanbarry.gateway.protocol
 
 import com.nolanbarry.gateway.delegates.ServerDelegate
+import com.nolanbarry.gateway.utils.getLogger
 import com.nolanbarry.gateway.model.*
 import com.nolanbarry.gateway.protocol.packet.*
-import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.coroutineScope
@@ -25,7 +25,7 @@ class Exchange(
     private var server: Socket? = null
 
     private val exchangeId = Random.nextBytes(6).map { it.toString(16) }
-    private val log = KotlinLogging.logger("ex$exchangeId")
+    private val log = getLogger("ex$exchangeId")
 
     companion object {
         suspend fun pipe(source: ByteReadChannel, dest: ByteWriteChannel) = coroutineScope {
@@ -37,6 +37,7 @@ class Exchange(
 
     /** Oversee the packet exchange. Returns when the exchange is complete. */
     suspend fun handle() = coroutineScope {
+        log.debug { "Connection established" }
         while (exchangeState != State.CLOSED) {
             val nextPacket = clientPacketQueue.consume()
 

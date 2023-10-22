@@ -1,6 +1,8 @@
-package com.nolanbarry.gateway.delegates
+package com.nolanbarry.gateway.delegates.local
 
-class LocalServerDelegate(config: ServerDelegateConfig) : ServerDelegate(config) {
+import com.nolanbarry.gateway.delegates.ServerDelegate
+
+class LocalServerDelegate : ServerDelegate() {
     override suspend fun isStarted(): Boolean {
         TODO("Not yet implemented")
     }

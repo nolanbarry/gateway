@@ -1,9 +1,9 @@
 package com.nolanbarry.gateway.config
 
-import com.nolanbarry.gateway.CommandLineArgs
+import com.nolanbarry.gateway.utils.CommandLineArgs
 import com.nolanbarry.gateway.utils.ResourceLoader.loadProperties
-import com.nolanbarry.gateway.StringParameter
-import com.nolanbarry.gateway.alias
+import com.nolanbarry.gateway.utils.StringParameter
+import com.nolanbarry.gateway.utils.alias
 import com.nolanbarry.gateway.utils.getLogger
 import com.nolanbarry.gateway.utils.retrieve
 import com.nolanbarry.gateway.utils.toDuration

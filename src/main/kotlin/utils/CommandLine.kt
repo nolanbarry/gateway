@@ -1,8 +1,7 @@
-package com.nolanbarry.gateway
+package com.nolanbarry.gateway.utils
 
 import java.lang.IllegalArgumentException
 import java.lang.RuntimeException
-import java.lang.reflect.TypeVariable
 
 abstract class Option<T>(val name: String, var defaultValue: T? = null) {
     val names: MutableList<String> = mutableListOf(name)

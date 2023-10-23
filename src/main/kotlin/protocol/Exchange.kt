@@ -154,7 +154,7 @@ class Exchange(
 
     /** Get the server status. If the server is online, its response is returned. Otherwise, a default status is
      * returned. */
-    private suspend fun getStatus(): ServerStatus {
+    private suspend fun getStatus(): ServerState {
         if (serverDelegate.isStarted()) {
             log.debug { "Server is online, forwarding status response from server" }
             val toServer = openServerConnection(State.STATUS_REQUEST)
@@ -167,7 +167,7 @@ class Exchange(
             return response.payload.response
         } else {
             log.debug { "Server is offline, sending default offline status response" }
-            return ServerStatus(
+            return ServerState(
                 version = Version(name = "1.20.1 (Gated)", protocol = Protocol.v1_20_1),
                 players = Players(max = 0, online = 0),
                 description = Chat(text = "Server is offline, connect to start.")

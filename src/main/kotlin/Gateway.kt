@@ -1,7 +1,7 @@
 package com.nolanbarry.gateway
 
 import com.nolanbarry.gateway.config.Configuration
-import com.nolanbarry.gateway.delegates.ServerDelegateInjector
+import com.nolanbarry.gateway.delegates.ServerDelegate
 import com.nolanbarry.gateway.model.SOCKET_SELECTOR
 import com.nolanbarry.gateway.protocol.Exchange
 import com.nolanbarry.gateway.utils.getLogger
@@ -18,7 +18,7 @@ suspend fun main(args: Array<String>) = coroutineScope {
 
     val config = Configuration.gateway
 
-    val serverDelegate = ServerDelegateInjector.get()
+    val serverDelegate = ServerDelegate.load()
 
     log.info { "Starting gateway on port ${config.port}" }
     val socket = aSocket(SOCKET_SELECTOR).tcp().bind("0.0.0.0", config.port)

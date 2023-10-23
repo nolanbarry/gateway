@@ -7,5 +7,4 @@ object Configuration {
     }
 
     lateinit var gateway: GatewayConfiguration
-    val delegate = DelegateConfiguration.load()
 }

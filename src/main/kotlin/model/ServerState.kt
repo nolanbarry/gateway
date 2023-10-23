@@ -30,7 +30,7 @@ data class Players(
 )
 
 @Serializable
-data class ServerStatus(
+data class ServerState(
     var version: Version,
     /** The message to display in the server list (aka motd) */
     var description: Chat,

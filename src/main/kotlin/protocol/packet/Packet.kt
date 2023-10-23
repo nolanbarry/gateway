@@ -1,6 +1,6 @@
 package com.nolanbarry.gateway.protocol.packet
 
-import com.nolanbarry.gateway.model.ServerStatus
+import com.nolanbarry.gateway.model.ServerState
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 import kotlin.reflect.full.memberProperties
@@ -102,7 +102,7 @@ object Client {
 }
 
 object Server {
-    data class StatusResponse(val response: ServerStatus)
+    data class StatusResponse(val response: ServerState)
     data class PingResponse(val pingPayload: Long)
 }
 

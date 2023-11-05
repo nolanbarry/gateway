@@ -18,6 +18,7 @@ configurations {
 
 dependencies {
     testImplementation(kotlin("test"))
+    implementation(kotlin("reflect"))
     implementation("io.ktor:ktor-server-core:2.3.4")
     implementation("io.ktor:ktor-network:2.3.4")
     implementation("io.ktor:ktor-network-tls:2.3.4")

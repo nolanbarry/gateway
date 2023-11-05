@@ -17,6 +17,5 @@ val CLASS_HAS_NO_PRIMARY_CONSTRUCTOR =
 val UNSUPPORTED_CONSTRUCTION_TYPE = { which: KClass<*>, who: String, what: KClass<*> ->
     "Parameter '$who' in constructor of ${which.jvmName} is of an unsupported type '${what.jvmName}'"
 }
-val CLASS_MUST_ACCEPT_TYPE =
-    { which: KClass<*>, what: KClass<*> -> "Primary constructor of class ${which.jvmName} must accept an " +
-            "argument with type '${what.jvmName}', but no parameter has that type." }
+val CLASS_MUST_BE_SUBTYPE_OF =
+    { sup: KClass<*>, sub: KClass<*> -> "Class ${sub.jvmName} must be a subtype of ${sup.jvmName}." }

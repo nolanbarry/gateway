@@ -14,7 +14,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.datetime.Clock
-import kotlin.reflect.full.primaryConstructor
+import kotlin.reflect.full.isSubclassOf
 import kotlin.time.Duration
 
 @OptIn(DelicateCoroutinesApi::class)
@@ -26,7 +26,8 @@ abstract class ServerDelegate {
     protected val log = getLogger {}
 
     protected val stateTransition = Mutex()
-    private var state = UNKNOWN
+    var state = UNKNOWN
+        private set
 
     init {
         GlobalScope.launch { monitor() }
@@ -49,27 +50,20 @@ abstract class ServerDelegate {
 
             val delegatesPackage = this::class.java.packageName
             val delegateClasspath = "$delegatesPackage.$packageName.${packageName.capitalize()}Delegate"
-            val propertiesClasspath = "$delegatesPackage.$packageName.${packageName.capitalize()}Config"
 
             log.debug { "Building server delegate:" }
             log.debug { "Configured package: $packageName" }
 
             try {
-                log.debug { "Looking for properties implementation at $propertiesClasspath" }
-                val propertiesClass = Class.forName(propertiesClasspath).kotlin
-                val config = properties.loadInto(propertiesClass)
-
                 log.debug { "Looking for delegate implementation at $delegateClasspath" }
                 val delegateClass = Class.forName(delegateClasspath).kotlin
 
-                val constructor = delegateClass.primaryConstructor
-                    ?: throw IllegalArgumentException(CLASS_HAS_NO_PRIMARY_CONSTRUCTOR(delegateClass))
-                val configParameter = constructor.parameters.find { param -> param.type == propertiesClass }
-                    ?: throw IllegalArgumentException(CLASS_MUST_ACCEPT_TYPE(delegateClass, propertiesClass))
+                if (!delegateClass.isSubclassOf(ServerDelegate::class))
+                    throw IllegalArgumentException(CLASS_MUST_BE_SUBTYPE_OF(ServerDelegate::class, delegateClass))
 
-                return delegateClass.primaryConstructor!!.callBy(mapOf(configParameter to config)) as ServerDelegate
+                return properties.loadInto(delegateClass) as ServerDelegate
             } catch (e: Exception) {
-                log.error(e) { "Server delegate injection failed:" }
+                log.error { "Server delegate injection failed:" }
                 throw e
             }
         }
@@ -78,11 +72,12 @@ abstract class ServerDelegate {
     protected abstract suspend fun getCurrentState(): ServerStatus
     protected abstract suspend fun startServer()
     protected abstract suspend fun stopServer()
-    abstract suspend fun getServerAddress(): String
+    /** Retrieve the address and port of the minecraft server. It is guaranteed that this will only be called with
+     * the server is online. Behavior is undefined if called when the server is in any state other than [STARTED]. */
+    abstract suspend fun getServerAddress(): Pair<String, Int>
 
     /** Where the server currently is in its availability lifecycle. The server starts with status [UNKNOWN], this is
-     * updated the next time status is prompted into a specific state (see
-     * [waitForServerToBe(ServerStatus)][waitForServerToBe]).
+     * updated the next time status is prompted into a specific state (see [waitForServerToBe]).
      *
      * Distinct from server *status*: see [getState()][getState]. */
     enum class ServerStatus { STARTING, STARTED, STOPPING, STOPPED, UNKNOWN }
@@ -132,8 +127,8 @@ abstract class ServerDelegate {
 
     suspend fun openSocket(): Socket = coroutineScope {
         waitForServerToBe(STARTED)
-        val address = getServerAddress()
-        val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, GatewayConfiguration.port)
+        val (address, port) = getServerAddress()
+        val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, port)
         socket
     }
 

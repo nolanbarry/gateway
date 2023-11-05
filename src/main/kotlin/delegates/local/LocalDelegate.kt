@@ -2,7 +2,10 @@ package com.nolanbarry.gateway.delegates.local
 
 import com.nolanbarry.gateway.delegates.ServerDelegate
 
-class LocalDelegate(config: LocalConfig) : ServerDelegate() {
+class LocalDelegate(
+    private val directory: String,
+    private val localServerPort: Int = 25565
+) : ServerDelegate() {
     private var serverProcess: Process? = null
     private var currentState: ServerStatus = ServerStatus.STOPPED
 
@@ -14,11 +17,12 @@ class LocalDelegate(config: LocalConfig) : ServerDelegate() {
     }
 
     override suspend fun stopServer() {
-        TODO("Not yet implemented")
+        if (currentState != ServerStatus.STARTED)
+            throw IllegalStateException("Requested server stop while state is $currentState")
     }
 
-    override suspend fun getServerAddress(): String {
-        TODO("Not yet implemented")
+    override suspend fun getServerAddress(): Pair<String, Int> {
+        return "localhost" to localServerPort
     }
 
 }

@@ -3,11 +3,7 @@ package com.nolanbarry.gateway.delegates.aws
 import com.nolanbarry.gateway.delegates.ServerDelegate
 
 class AwsDelegate : ServerDelegate() {
-    override suspend fun isStarted(): Boolean {
-        TODO("Not yet implemented")
-    }
-
-    override suspend fun isStopped(): Boolean {
+    override suspend fun getCurrentState(): ServerStatus {
         TODO("Not yet implemented")
     }
 
@@ -19,7 +15,8 @@ class AwsDelegate : ServerDelegate() {
         TODO("Not yet implemented")
     }
 
-    override suspend fun getServerAddress(): String {
+    override suspend fun getServerAddress(): Pair<String, Int> {
         TODO("Not yet implemented")
     }
+
 }

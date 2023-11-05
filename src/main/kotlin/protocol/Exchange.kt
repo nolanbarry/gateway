@@ -1,6 +1,7 @@
 package com.nolanbarry.gateway.protocol
 
 import com.nolanbarry.gateway.delegates.ServerDelegate
+import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.STARTED
 import com.nolanbarry.gateway.utils.getLogger
 import com.nolanbarry.gateway.model.*
 import com.nolanbarry.gateway.protocol.packet.*
@@ -138,10 +139,12 @@ class Exchange(
         if (intent !in listOf(State.LOGIN, State.STATUS_REQUEST))
             throw IllegalArgumentException("Illegal intent ${intent.name}")
 
+        val (address, port) = serverDelegate.getServerAddress()
+
         val handshakePayload = Client.Handshake(
             protocolVersion = Protocol.v1_20_1,
-            serverAddress = serverDelegate.getServerAddress(),
-            serverPort = serverDelegate.port.toUShort(),
+            serverAddress = address,
+            serverPort = port.toUShort(),
             nextState = intent.ordinal
         )
 
@@ -155,7 +158,8 @@ class Exchange(
     /** Get the server status. If the server is online, its response is returned. Otherwise, a default status is
      * returned. */
     private suspend fun getStatus(): ServerState {
-        if (serverDelegate.isStarted()) {
+        val currentState = serverDelegate.state
+        if (currentState == STARTED) {
             log.debug { "Server is online, forwarding status response from server" }
             val toServer = openServerConnection(State.STATUS_REQUEST)
             val serverPacketQueue = PacketQueue(server!!.openReadChannel())
@@ -167,10 +171,11 @@ class Exchange(
             return response.payload.response
         } else {
             log.debug { "Server is offline, sending default offline status response" }
+            // Message will be cryptic if state is UNKNOWN
             return ServerState(
                 version = Version(name = "1.20.1 (Gated)", protocol = Protocol.v1_20_1),
                 players = Players(max = 0, online = 0),
-                description = Chat(text = "Server is offline, connect to start.")
+                description = Chat(text = "Server is ${currentState.name.lowercase()}, connect to start.")
             )
         }
     }

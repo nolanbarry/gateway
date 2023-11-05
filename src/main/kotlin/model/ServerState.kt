@@ -32,7 +32,7 @@ data class Players(
 @Serializable
 data class ServerState(
     var version: Version,
-    /** The message to display in the server list (aka motd) */
+    /** The message to display in the server list (aka as "message of the day" or "motd") */
     var description: Chat,
     var players: Players,
     /** A base64-encoded 64x64 icon to display in the server list */

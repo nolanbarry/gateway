@@ -1,12 +1,14 @@
 package com.nolanbarry.gateway.delegates
 
-import com.nolanbarry.gateway.config.Configuration
+import com.nolanbarry.gateway.config.GatewayConfiguration
 import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.*
 import com.nolanbarry.gateway.model.MisconfigurationException
 import com.nolanbarry.gateway.model.SOCKET_SELECTOR
 import com.nolanbarry.gateway.model.ServerState
 import com.nolanbarry.gateway.utils.*
 import io.ktor.network.sockets.*
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -15,8 +17,8 @@ import kotlinx.datetime.Clock
 import kotlin.reflect.full.primaryConstructor
 import kotlin.time.Duration
 
+@OptIn(DelicateCoroutinesApi::class)
 abstract class ServerDelegate {
-    protected val config = Configuration.gateway
 
     protected var timeEmpty = Duration.ZERO
     protected var playerCount = 0
@@ -26,8 +28,14 @@ abstract class ServerDelegate {
     protected val stateTransition = Mutex()
     private var state = UNKNOWN
 
+    init {
+        GlobalScope.launch { monitor() }
+    }
+
     companion object {
-        /** TODO: Load this from gateway configuration or elsewhere defined at compile-time */
+        /** TODO: Load this from gateway configuration or elsewhere defined at compile-time
+         * `delegate.properties` just contains the information used to find and build the delegate class at runtime.
+         * A single `delegate.properties` file will be included on the classpath building a jar. */
         private const val DELEGATE_PROPERTIES_PATH = "/local/delegate.properties"
 
         /** Retrieve the ServerDelegate implementation chosen at build time.
@@ -125,7 +133,7 @@ abstract class ServerDelegate {
     suspend fun openSocket(): Socket = coroutineScope {
         waitForServerToBe(STARTED)
         val address = getServerAddress()
-        val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, config.port)
+        val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, GatewayConfiguration.port)
         socket
     }
 
@@ -135,7 +143,7 @@ abstract class ServerDelegate {
         TODO()
     }
 
-    /** Update internal knowledge of server state (player count) and stop server `config.timeout` time has elapsed
+    /** Update internal knowledge of server state (player count) and stop server if `config.timeout` time has elapsed
      * with no players. */
     private suspend fun checkup() = coroutineScope {
         runCatching {
@@ -151,7 +159,7 @@ abstract class ServerDelegate {
             if (playerCount == 0) {
                 timeEmpty += lastCheckup - now
 
-                if (timeEmpty >= config.timeout) {
+                if (timeEmpty >= GatewayConfiguration.timeout) {
                     timeEmpty = Duration.ZERO
                     waitForServerToBe(STOPPED)
                 }
@@ -162,10 +170,10 @@ abstract class ServerDelegate {
         }
     }
 
-    /** A job that loops forever, checking whether the server should be closed regularly as defined in `config
-     * .frequency`. This function will not return until cancelled. */
+    /** A job that loops forever, checking whether the server should be closed regularly as defined in `config.frequency`.
+     * This function will not return until cancelled. */
     private suspend fun monitor() = coroutineScope {
-        val metronome = createMetronome(config.frequency)
+        val metronome = createMetronome(GatewayConfiguration.frequency)
         metronome.collect { checkup() }
     }
 }

@@ -20,7 +20,7 @@ import kotlin.time.toDuration
 object GatewayConfiguration {
 
     private const val DEFAULT_GATEWAY_PROPERTIES_PATH = "/gateway.properties"
-    private const val DEFAULT_PORT = 25565
+    private const val DEFAULT_GATEWAY_PORT = 25565
     private val DEFAULT_TIMEOUT = 15.toDuration(DurationUnit.MINUTES)
     private val DEFAULT_FREQUENCY = 30.toDuration(DurationUnit.SECONDS)
 
@@ -43,7 +43,7 @@ object GatewayConfiguration {
 
         propertyFile = loadProperties(propertiesPath)
 
-        port = propertyFile.retrieve("port", DEFAULT_PORT) { it.toInt() }
+        port = propertyFile.retrieve("port", DEFAULT_GATEWAY_PORT) { it.toInt() }
         protocol = propertyFile.retrieve("protocol")
         timeout = propertyFile.retrieve("timeout", DEFAULT_TIMEOUT) { it.toDuration(DurationUnit.SECONDS) }
         frequency = propertyFile.retrieve("frequency", DEFAULT_FREQUENCY) { it.toDuration(DurationUnit.SECONDS) }

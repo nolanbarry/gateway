@@ -24,7 +24,6 @@ object Field {
 
     val VarInt = object : FieldInterface<Int> {
         override fun parse(buffer: ByteBuffer): Int {
-            buffer.mark()
             var result = 0L
             var significantBitsRead = 0
             do {
@@ -55,7 +54,7 @@ object Field {
     val String = object : FieldInterface<String> {
         override fun parse(buffer: ByteBuffer): String {
             val length = VarInt.parse(buffer)
-            return (0..<length).map { buffer.getChar() }.joinToString("")
+            return (0..<length).map { buffer.get().toInt().toChar() }.joinToString("")
         }
 
         override fun encode(data: String): ByteBuffer {

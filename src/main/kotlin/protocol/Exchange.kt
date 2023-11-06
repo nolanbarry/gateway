@@ -25,8 +25,8 @@ class Exchange(
     private val toClient = client.openWriteChannel(autoFlush = true)
     private var server: Socket? = null
 
-    private val exchangeId = Random.nextBytes(6).map { it.toString(16) }
-    private val log = getLogger("ex$exchangeId")
+    private val exchangeId = Random.nextBytes(3).joinToString("") { it.toUByte().toString(16) }
+    private val log = getLogger("ex-$exchangeId")
 
     companion object {
         suspend fun pipe(source: ByteReadChannel, dest: ByteWriteChannel) = coroutineScope {
@@ -133,13 +133,11 @@ class Exchange(
     private suspend fun openServerConnection(intent: State): ByteWriteChannel {
         log.debug { "Opening connection to server" }
         if (server != null) throw RuntimeException("Server connection already opened")
-
-        val server = serverDelegate.openSocket().also { this.server = it }
-
         if (intent !in listOf(State.LOGIN, State.STATUS_REQUEST))
             throw IllegalArgumentException("Illegal intent ${intent.name}")
 
-        val (address, port) = serverDelegate.getServerAddress()
+        val (server, address, port) = serverDelegate.openSocket()
+            .also { this.server = it.first }
 
         val handshakePayload = Client.Handshake(
             protocolVersion = Protocol.v1_20_1,

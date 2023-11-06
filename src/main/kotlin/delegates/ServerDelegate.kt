@@ -2,20 +2,22 @@ package com.nolanbarry.gateway.delegates
 
 import com.nolanbarry.gateway.config.GatewayConfiguration
 import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.*
-import com.nolanbarry.gateway.model.MisconfigurationException
-import com.nolanbarry.gateway.model.SOCKET_SELECTOR
-import com.nolanbarry.gateway.model.ServerState
+import com.nolanbarry.gateway.model.*
+import com.nolanbarry.gateway.protocol.Exchange
+import com.nolanbarry.gateway.protocol.PacketQueue
+import com.nolanbarry.gateway.protocol.packet.Client
+import com.nolanbarry.gateway.protocol.packet.Packet
+import com.nolanbarry.gateway.protocol.packet.Server
 import com.nolanbarry.gateway.utils.*
 import io.ktor.network.sockets.*
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.datetime.Clock
 import kotlin.reflect.full.isSubclassOf
 import kotlin.time.Duration
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 
 @OptIn(DelicateCoroutinesApi::class)
 abstract class ServerDelegate {
@@ -29,11 +31,14 @@ abstract class ServerDelegate {
     var state = UNKNOWN
         private set
 
+
     init {
         GlobalScope.launch { monitor() }
     }
 
     companion object {
+        private val BACKOFF = 3.toDuration(DurationUnit.SECONDS)
+
         /** TODO: Load this from gateway configuration or elsewhere defined at compile-time
          * `delegate.properties` just contains the information used to find and build the delegate class at runtime.
          * A single `delegate.properties` file will be included on the classpath building a jar. */
@@ -61,7 +66,7 @@ abstract class ServerDelegate {
                 if (!delegateClass.isSubclassOf(ServerDelegate::class))
                     throw IllegalArgumentException(CLASS_MUST_BE_SUBTYPE_OF(ServerDelegate::class, delegateClass))
 
-                return properties.loadInto(delegateClass) as ServerDelegate
+                return GatewayConfiguration.propertyFile.loadInto(delegateClass) as ServerDelegate
             } catch (e: Exception) {
                 log.error { "Server delegate injection failed:" }
                 throw e
@@ -69,11 +74,25 @@ abstract class ServerDelegate {
         }
     }
 
+    /** Retrieve the status of the minecraft server *from its source*. This might involve pinging both the cloud
+     * provider to make sure the VM is online, and the server itself to confirm that it's accepting connect ions.
+     * Implementations of [getCurrentState] are only required to return [STOPPED] or [STARTED], and [STARTED] should
+     * only be returned the server is accepting player connections (otherwise [STOPPED] is acceptable). */
     protected abstract suspend fun getCurrentState(): ServerStatus
+
+    /** Start the server. Throwing a [IncompatibleServerStateException] will cause the abstract class to back off, and
+     *  can be thrown if the server can't be started for any reason, although preferred behavior would be to return
+     *  immediately if the server is already started and wait for the server to finish starting if it's currently
+     *  booting up. */
     protected abstract suspend fun startServer()
+
+    /** Start the server. Throwing a [IncompatibleServerStateException] will cause the abstract class to back off, and
+     *  can be thrown if the server can't be started for any reason, although preferred behavior would be to return
+     *  immediately if the server is already stopped and wait for the server to be stopped if it's currently stopping. */
     protected abstract suspend fun stopServer()
-    /** Retrieve the address and port of the minecraft server. It is guaranteed that this will only be called with
-     * the server is online. Behavior is undefined if called when the server is in any state other than [STARTED]. */
+
+    /** Retrieve the address and port of the minecraft server. Throws [IncompatibleServerStateException] if the
+     * server is unavailable. */
     abstract suspend fun getServerAddress(): Pair<String, Int>
 
     /** Where the server currently is in its availability lifecycle. The server starts with status [UNKNOWN], this is
@@ -97,26 +116,32 @@ abstract class ServerDelegate {
         val pendingStateUpdateChannel = Channel<Unit>(Channel.CONFLATED)
 
         while (desiredState != state) {
+            // Every state has a single "next" state, so we just cycle through them until we reach the desired state.
             when (state) {
                 UNKNOWN -> state = getCurrentState()
                 STARTING,
                 STOPPING -> pendingStateUpdateChannel.receive()
 
+                STOPPED,
                 STARTED -> {
-                    state = STOPPING
+                    // Put the server in the next, intermediate state, then actually start/stop server asynchronously,
+                    // notifying the main thread when the server has reached that state.
+                    state = if (state == STOPPED) STARTING else STOPPING
                     launch {
-                        stopServer()
-                        pendingStateUpdateChannel.send(Unit)
-                        state = STOPPED
-                    }
-                }
-
-                STOPPED -> {
-                    state = STARTING
-                    launch {
-                        startServer()
-                        pendingStateUpdateChannel.send(Unit)
-                        state = STARTED
+                        try {
+                            state = if (state == STOPPING) {
+                                stopServer()
+                                STOPPED
+                            } else {
+                                startServer()
+                                STARTED
+                            }
+                        } catch (e: IncompatibleServerStateException) {
+                            state = UNKNOWN
+                            delay(BACKOFF)
+                        } finally {
+                            pendingStateUpdateChannel.send(Unit)
+                        }
                     }
                 }
             }
@@ -125,17 +150,33 @@ abstract class ServerDelegate {
         stateTransition.unlock()
     }
 
-    suspend fun openSocket(): Socket = coroutineScope {
+    suspend fun openSocket() = coroutineScope {
         waitForServerToBe(STARTED)
         val (address, port) = getServerAddress()
         val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, port)
-        socket
+        Triple(socket, address, port)
     }
 
     /** Retrieve the server state, which is a JSON object containing information about the server, such as number of
      * players online, message of the day, version, etc. Distinct from server *status*: see [ServerStatus] */
     private suspend fun getState(): ServerState = coroutineScope {
-        TODO()
+        val (socket, address, port) = openSocket()
+        val packetQueue = PacketQueue(socket.openReadChannel())
+        val toServer = socket.openWriteChannel(autoFlush = true)
+
+        toServer.writeFully(Packet(0, Client.Handshake(
+            protocolVersion = Protocol.v1_20_2,
+            serverAddress = address,
+            serverPort = port.toUShort(),
+            nextState = Exchange.State.STATUS_REQUEST.ordinal
+        )).encode())
+        toServer.writeFully(Packet(0, Client.StatusRequest()).encode())
+
+        val response = packetQueue.consume().interpretAs<Server.StatusResponse>()
+
+        socket.close()
+
+        response.payload.response
     }
 
     /** Update internal knowledge of server state (player count) and stop server if `config.timeout` time has elapsed
@@ -145,6 +186,9 @@ abstract class ServerDelegate {
             if (state == STOPPED) {
                 playerCount = 0
                 timeEmpty = Duration.ZERO
+                return@coroutineScope
+            } else if (state == UNKNOWN) {
+                log.debug { "Skipping checkup because server state is unknown" }
                 return@coroutineScope
             }
 
@@ -170,5 +214,15 @@ abstract class ServerDelegate {
     private suspend fun monitor() = coroutineScope {
         val metronome = createMetronome(GatewayConfiguration.frequency)
         metronome.collect { checkup() }
+    }
+
+    /** TCP ping on [address]:[port]. Returns `true` if connection was established within [timeout]. */
+    protected suspend fun isAcceptingConnections(address: String, port: Int, timeout: Duration): Boolean {
+        return runCatching {
+            val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, port) {
+                socketTimeout = timeout.inWholeMilliseconds
+            }
+            withContext(Dispatchers.IO) { socket.close() }
+        }.isSuccess
     }
 }

@@ -13,7 +13,7 @@ class PacketQueue(private val readChannel: ByteReadChannel) {
     }
 
     private var buffer = ByteBuffer.allocate(MINIMUM_BUFFER_SIZE)
-    private val bufferFill get() = buffer.limit() / buffer.capacity().toDouble()
+    private val bufferFill get() = buffer.position() / buffer.capacity().toDouble()
     private var closed = false
 
     fun end(): Pair<ByteBuffer, ByteReadChannel> {

@@ -1,7 +1,13 @@
 package com.nolanbarry.gateway.utils
 
 import com.nolanbarry.gateway.model.MisconfigurationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import java.io.BufferedReader
+import java.nio.file.Path
 import java.util.*
+import kotlin.io.path.Path
 import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.full.valueParameters
@@ -40,11 +46,12 @@ fun <T: Any> Properties.loadInto(dataClass: KClass<T>): T {
             throw MisconfigurationException(PROPERTY_IS_REQUIRED_BUT_MISSING(name))
         else if (property == null) return@associateNotNull null
 
-        param to when (param.type) {
+        param to when (val type = param.type.jvmErasure) {
             String::class -> property
             Int::class -> property.toInt()
             Double::class -> property.toDouble()
-            else -> throw IllegalArgumentException(UNSUPPORTED_CONSTRUCTION_TYPE(dataClass, name, param.type.jvmErasure))
+            Path::class -> Path(property)
+            else -> throw IllegalArgumentException(UNSUPPORTED_CONSTRUCTION_TYPE(dataClass, name, type))
         }
     }
 
@@ -56,3 +63,12 @@ fun String.capitalize() = replaceFirstChar { it.titlecase(Locale.ENGLISH) }
 
 fun <T, K, V> Iterable<T>.associateNotNull(operation: (T) -> Pair<K, V>?): Map<K, V> =
     this.mapNotNull(operation).toMap()
+
+fun BufferedReader.asFlow() = flow {
+    use {
+        while (true) {
+            val line = readLine() ?: break
+            emit(line)
+        }
+    }
+}.flowOn(Dispatchers.IO)

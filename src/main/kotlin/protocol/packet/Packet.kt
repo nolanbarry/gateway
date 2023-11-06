@@ -49,7 +49,7 @@ data class RawPacket (
         /** Read a `RawPacket` from the beginning (position 0) of the buffer. If the buffer doesn't contain an entire packet,
          * returns `null`. If a packet is returned, the passed buffer's position will be set to the next byte after the packet. */
         fun from(buffer: ByteBuffer): RawPacket? {
-            val window = buffer.asReadOnlyBuffer().position(0)
+            val window = buffer.asReadOnlyBuffer().position(0).limit(buffer.position())
             try {
                 parseLegacyServerListPing(window)?.apply { return this }
 
@@ -59,6 +59,7 @@ data class RawPacket (
 
                 val payload = ByteBuffer.allocate(actualPayloadLength)
                 repeat(actualPayloadLength) { payload.put(window.get()) }
+                payload.position(0)
 
                 buffer.position(window.position())
                 return RawPacket(id, payload)

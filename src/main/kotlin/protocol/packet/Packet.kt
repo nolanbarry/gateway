@@ -1,10 +1,12 @@
 package com.nolanbarry.gateway.protocol.packet
 
+import com.nolanbarry.gateway.model.InvalidDataException
 import com.nolanbarry.gateway.model.ServerState
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.primaryConstructor
+import kotlin.reflect.jvm.jvmName
 
 typealias VarInt = Int
 
@@ -13,8 +15,9 @@ data class Packet<P: Any> (
     val payload: P
 ) {
     fun encode(): ByteBuffer {
+        // Get a list of the fields in the payload by calling each property's getter
         val definition = payload::class.memberProperties.map {
-                prop -> prop.call() ?: throw IllegalArgumentException("Packet property ${prop.name} is null")
+                prop -> prop.getter.call(payload) ?: throw IllegalArgumentException("Packet property ${prop.name} is null")
         }
         val buffers = definition.map { field ->
             when (field) {
@@ -24,7 +27,8 @@ data class Packet<P: Any> (
                 is UShort -> Field.UnsignedShort.encode(field)
                 is ULong -> Field.UnsignedLong.encode(field)
                 is Long -> Field.SignedLong.encode(field)
-                else -> Field.Json.encode(field)
+                is ServerState -> Field.Json.encode(field)
+                else -> throw InvalidDataException("Can't serialize class '${field::class.jvmName}'")
             }
         }
         val idBuffer = Field.VarInt.encode(id)
@@ -47,13 +51,17 @@ data class RawPacket (
 
     companion object {
         /** Read a `RawPacket` from the beginning (position 0) of the buffer. If the buffer doesn't contain an entire packet,
-         * returns `null`. If a packet is returned, the passed buffer's position will be set to the next byte after the packet. */
+         * returns `null`. If a packet is returned, it will be removed from the passed [buffer] and [buffer]'s
+         * position will be equal to the number of unused bytes still in the buffer. */
         fun from(buffer: ByteBuffer): RawPacket? {
+            if (buffer.position() == 0) return null
             val window = buffer.asReadOnlyBuffer().position(0).limit(buffer.position())
             try {
                 parseLegacyServerListPing(window)?.apply { return this }
 
                 val payloadLength = Field.VarInt.parse(window)
+                if (payloadLength == 0)
+                    throw InvalidDataException("Invalid packet")
                 val actualPayloadLength = payloadLength - window.position()
                 val id = Field.VarInt.parse(window)
 
@@ -61,7 +69,9 @@ data class RawPacket (
                 repeat(actualPayloadLength) { payload.put(window.get()) }
                 payload.position(0)
 
+                buffer.limit(buffer.position())
                 buffer.position(window.position())
+                buffer.compact()
                 return RawPacket(id, payload)
             } catch (e: Exception) {
                 if (e is BufferUnderflowException) return null

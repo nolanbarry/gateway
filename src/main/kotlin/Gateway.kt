@@ -23,6 +23,6 @@ suspend fun main(args: Array<String>) = coroutineScope {
 
     while (true) {
         val client = socket.accept()
-        launch { Exchange(serverDelegate, client).handle() }
+        launch { Exchange(serverDelegate, client).doIt() }
     }
 }

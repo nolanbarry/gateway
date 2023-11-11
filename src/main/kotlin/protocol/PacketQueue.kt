@@ -2,7 +2,10 @@ package com.nolanbarry.gateway.protocol
 
 import com.nolanbarry.gateway.protocol.packet.RawPacket
 import io.ktor.utils.io.*
+import kotlinx.coroutines.withTimeout
 import java.nio.ByteBuffer
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 
 class PacketQueue(private val readChannel: ByteReadChannel) {
 
@@ -10,6 +13,7 @@ class PacketQueue(private val readChannel: ByteReadChannel) {
         private const val MINIMUM_BUFFER_SIZE = 256
         private const val GROW_THRESHOLD = 0.75
         private const val SHRINK_THRESHOLD = 0.25
+        private val TIMEOUT = 10.toDuration(DurationUnit.SECONDS)
     }
 
     private var buffer = ByteBuffer.allocate(MINIMUM_BUFFER_SIZE)
@@ -25,17 +29,17 @@ class PacketQueue(private val readChannel: ByteReadChannel) {
     /** Suspend until the next `RawPacket` is available and return it */
     suspend fun consume(): RawPacket {
         if (closed) throw RuntimeException("The packet queue is closed.")
-        while (true) {
+        do {
+            val packet = RawPacket.from(buffer)
+
+            if (packet != null) {
+                shrinkIfLow()
+                return packet
+            }
+
             growIfFilled()
-
-            readChannel.readAvailable(buffer)
-            val packet = RawPacket.from(buffer) ?: continue
-
-            buffer.compact()
-            shrinkIfLow()
-
-            return packet
-        }
+            withTimeout(TIMEOUT) { readChannel.readAvailable(buffer) }
+        } while (true)
     }
 
     /** Check if `buffer` has exceeded `GROW_THRESHOLD` fill level; if it has, double its capacity. */
@@ -53,6 +57,8 @@ class PacketQueue(private val readChannel: ByteReadChannel) {
         if (bufferFill > SHRINK_THRESHOLD) return
 
         val smallerBuffer = ByteBuffer.allocate(buffer.capacity() / 2)
+        buffer.limit(buffer.position())
+        buffer.position(0)
         smallerBuffer.put(buffer)
         buffer = smallerBuffer
     }

@@ -10,6 +10,7 @@ import io.ktor.utils.io.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.random.Random
+import kotlin.reflect.jvm.jvmName
 
 class Exchange(
     private val serverDelegate: ServerDelegate,
@@ -36,8 +37,19 @@ class Exchange(
         }
     }
 
+    suspend fun doIt() {
+        try {
+            handle()
+            log.info { "Exchange completed successfully" }
+        } catch (e: Throwable) {
+            log.error(e) { "Exchange completed exceptionally: '${e::class.simpleName}'" }
+        } finally {
+            close()
+        }
+    }
+
     /** Oversee the packet exchange. Returns when the exchange is complete. */
-    suspend fun handle() = coroutineScope {
+    private suspend fun handle() = coroutineScope {
         log.debug { "Connection established" }
         while (exchangeState != State.CLOSED) {
             val nextPacket = clientPacketQueue.consume()
@@ -66,19 +78,24 @@ class Exchange(
     private suspend fun handleHandshakePacket(packet: RawPacket): PostPacketAction {
         return when (packet.id) {
             0x00 -> {
+                log.debug { "Handshake packet" }
+
                 val handshake = packet.interpretAs<Client.Handshake>()
-                this.state = when (val nextState = handshake.payload.nextState) {
+                state = when (val nextState = handshake.payload.nextState) {
                     1 -> State.STATUS_REQUEST
                     2 -> State.LOGIN
                     else -> throw InvalidDataException("Invalid next state $nextState")
                 }
-                if (this.state == State.LOGIN) {
+
+                log.debug { "Next state: ${state.name}" }
+                if (state == State.LOGIN) {
                     initiateLogin()
                     PostPacketAction.END_MONITORING
                 } else PostPacketAction.CONTINUE
             }
 
             0xFE -> {
+                log.debug { "Legacy server ping" }
                 // This is a legacy server ping which we should respond to with a canned response indicating we are not
                 // a legacy server. See https://wiki.vg/Server_List_Ping#1.6
                 toClient.writeFully(LEGACY_SERVER_RESPONSE)
@@ -93,12 +110,14 @@ class Exchange(
     private suspend fun handleStatusRequestPacket(packet: RawPacket): PostPacketAction {
         return when (packet.id) {
             0x00 -> {
+                log.debug { "Client is requesting server status" }
                 val response = Server.StatusResponse(getStatus())
                 toClient.writeFully(Packet(0x00, response).encode())
                 PostPacketAction.CONTINUE
             }
 
             0x01 -> {
+                log.debug { "Client is measuring ping" }
                 val pingRequest = packet.interpretAs<Client.PingRequest>()
                 val pong = Server.PingResponse(pingRequest.payload.pingPayload)
                 toClient.writeFully(Packet(0x01, pong).encode())

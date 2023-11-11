@@ -2,6 +2,7 @@ package com.nolanbarry.gateway.delegates.local
 
 import com.nolanbarry.gateway.delegates.ServerDelegate
 import com.nolanbarry.gateway.model.IncompatibleServerStateException
+import com.nolanbarry.gateway.model.UnrecoverableServerException
 import com.nolanbarry.gateway.utils.asFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
@@ -60,7 +61,7 @@ class LocalDelegate(
             ?.firstOrNull() { listOf(EULA_TEXT, SERVER_STARTING).any(it::contains) }
             ?: throw IncompatibleServerStateException("Server startup failed")
 
-        if (EULA_TEXT in output) throw IncompatibleServerStateException(EULA_TEXT)
+        if (EULA_TEXT in output) throw UnrecoverableServerException(EULA_TEXT)
 
         log.info { "Local server started!" }
     }

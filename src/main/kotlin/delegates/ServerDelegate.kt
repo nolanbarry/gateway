@@ -83,7 +83,8 @@ abstract class ServerDelegate {
     /** Start the server. Throwing a [IncompatibleServerStateException] will cause the abstract class to back off, and
      *  can be thrown if the server can't be started for any reason, although preferred behavior would be to return
      *  immediately if the server is already started and wait for the server to finish starting if it's currently
-     *  booting up. */
+     *  booting up. If there is no sense in retrying, throw an [UnrecoverableServerException] and the requesting
+     *  client connection will be closed. */
     protected abstract suspend fun startServer()
 
     /** Start the server. Throwing a [IncompatibleServerStateException] will cause the abstract class to back off, and

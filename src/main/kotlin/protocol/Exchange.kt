@@ -41,6 +41,8 @@ class Exchange(
         try {
             handle()
             log.info { "Exchange completed successfully" }
+        } catch (e: ConnectionClosedException) {
+            log.info { "Client closed connection" }
         } catch (e: Throwable) {
             log.error(e) { "Exchange completed exceptionally: '${e::class.simpleName}'" }
         } finally {
@@ -191,7 +193,7 @@ class Exchange(
             // Message will be cryptic if state is UNKNOWN
             return ServerState(
                 version = Version(name = "1.20.1 (Gated)", protocol = Protocol.v1_20_1),
-                players = Players(max = 0, online = 0),
+                players = Players(max = 1, online = 0),
                 description = Chat(text = "Server is ${currentState.name.lowercase()}, connect to start.")
             )
         }

@@ -38,6 +38,8 @@ abstract class ServerDelegate {
 
     companion object {
         private val BACKOFF = 3.toDuration(DurationUnit.SECONDS)
+        private val DEFAULT_TIMEOUT = 1.toDuration(DurationUnit.SECONDS)
+        private val MAX_SERVER_ACTION_ATTEMPTS = 5
 
         /** TODO: Load this from gateway configuration or elsewhere defined at compile-time
          * `delegate.properties` just contains the information used to find and build the delegate class at runtime.
@@ -116,6 +118,8 @@ abstract class ServerDelegate {
 
         val pendingStateUpdateChannel = Channel<Unit>(Channel.CONFLATED)
 
+        var serverActionAttempts = 0
+
         while (desiredState != state) {
             // Every state has a single "next" state, so we just cycle through them until we reach the desired state.
             when (state) {
@@ -127,6 +131,12 @@ abstract class ServerDelegate {
                 STARTED -> {
                     // Put the server in the next, intermediate state, then actually start/stop server asynchronously,
                     // notifying the main thread when the server has reached that state.
+                    if (serverActionAttempts >= MAX_SERVER_ACTION_ATTEMPTS) {
+                        val attemptedAction = if (state == STOPPED) "start" else "stop"
+                        throw UnrecoverableServerException(
+                            FAILED_TO_DO_AFTER_X_ATTEMPTS(attemptedAction, MAX_SERVER_ACTION_ATTEMPTS))
+                    }
+                    serverActionAttempts++
                     state = if (state == STOPPED) STARTING else STOPPING
                     launch {
                         try {
@@ -165,12 +175,14 @@ abstract class ServerDelegate {
         val packetQueue = PacketQueue(socket.openReadChannel())
         val toServer = socket.openWriteChannel(autoFlush = true)
 
-        toServer.writeFully(Packet(0, Client.Handshake(
-            protocolVersion = Protocol.v1_20_2,
-            serverAddress = address,
-            serverPort = port.toUShort(),
-            nextState = Exchange.State.STATUS_REQUEST.ordinal
-        )).encode())
+        toServer.writeFully(
+            Packet(
+                0, Client.Handshake(
+                    protocolVersion = Protocol.v1_20_2,
+                    serverAddress = address,
+                    serverPort = port.toUShort(),
+                    nextState = Exchange.State.STATUS_REQUEST.ordinal
+                )).encode())
         toServer.writeFully(Packet(0, Client.StatusRequest()).encode())
 
         val response = packetQueue.consume().interpretAs<Server.StatusResponse>()
@@ -218,7 +230,11 @@ abstract class ServerDelegate {
     }
 
     /** TCP ping on [address]:[port]. Returns `true` if connection was established within [timeout]. */
-    protected suspend fun isAcceptingConnections(address: String, port: Int, timeout: Duration): Boolean {
+    protected suspend fun isAcceptingConnections(
+        address: String,
+        port: Int,
+        timeout: Duration = DEFAULT_TIMEOUT
+    ): Boolean {
         return runCatching {
             val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, port) {
                 socketTimeout = timeout.inWholeMilliseconds

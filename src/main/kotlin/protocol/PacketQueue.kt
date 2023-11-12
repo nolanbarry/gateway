@@ -1,5 +1,6 @@
 package com.nolanbarry.gateway.protocol
 
+import com.nolanbarry.gateway.model.ConnectionClosedException
 import com.nolanbarry.gateway.protocol.packet.RawPacket
 import io.ktor.utils.io.*
 import kotlinx.coroutines.withTimeout
@@ -13,7 +14,7 @@ class PacketQueue(private val readChannel: ByteReadChannel) {
         private const val MINIMUM_BUFFER_SIZE = 256
         private const val GROW_THRESHOLD = 0.75
         private const val SHRINK_THRESHOLD = 0.25
-        private val TIMEOUT = 10.toDuration(DurationUnit.SECONDS)
+        private val TIMEOUT = 3.toDuration(DurationUnit.SECONDS)
     }
 
     private var buffer = ByteBuffer.allocate(MINIMUM_BUFFER_SIZE)
@@ -36,6 +37,8 @@ class PacketQueue(private val readChannel: ByteReadChannel) {
                 shrinkIfLow()
                 return packet
             }
+
+            if (readChannel.isClosedForRead) throw ConnectionClosedException()
 
             growIfFilled()
             withTimeout(TIMEOUT) { readChannel.readAvailable(buffer) }

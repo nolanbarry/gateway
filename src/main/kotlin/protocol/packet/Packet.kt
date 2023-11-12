@@ -72,6 +72,7 @@ data class RawPacket (
                 buffer.limit(buffer.position())
                 buffer.position(window.position())
                 buffer.compact()
+
                 return RawPacket(id, payload)
             } catch (e: Exception) {
                 if (e is BufferUnderflowException) return null

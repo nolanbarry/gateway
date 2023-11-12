@@ -30,7 +30,7 @@ const val MINIMUM_KNOWN_LEGACY_PACKET_SIZE = 29
  */
 fun parseLegacyServerListPing(buffer: ByteBuffer): RawPacket? {
     if (buffer.limit() < LEGACY_PACKET_SIGNATURE.limit()) return null
-    if (buffer.compareTo(LEGACY_PACKET_SIGNATURE) != 0) return null
+    if (buffer.slice(0, LEGACY_PACKET_SIGNATURE.limit()).compareTo(LEGACY_PACKET_SIGNATURE) != 0) return null
     if (buffer.limit() < MINIMUM_KNOWN_LEGACY_PACKET_SIZE) throw BufferUnderflowException()
 
     val lengthOfRemainingPayload = buffer.getShort(27)
@@ -40,6 +40,6 @@ fun parseLegacyServerListPing(buffer: ByteBuffer): RawPacket? {
 
     return RawPacket(
         id = 0xfe,
-        payload = buffer.slice(MINIMUM_KNOWN_LEGACY_PACKET_SIZE, totalPacketLength)
+        payload = buffer.slice(MINIMUM_KNOWN_LEGACY_PACKET_SIZE, lengthOfRemainingPayload.toInt())
     )
 }

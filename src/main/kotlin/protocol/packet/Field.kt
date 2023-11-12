@@ -2,9 +2,11 @@ package com.nolanbarry.gateway.protocol.packet
 
 import com.nolanbarry.gateway.model.InvalidDataException
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.nio.ByteBuffer
 import kotlin.reflect.full.companionObject
-import kotlinx.serialization.json.Json as KotlinxJson
+
+val json = Json
 
 interface FieldInterface<T> {
     fun parse(buffer: ByteBuffer): T
@@ -12,8 +14,8 @@ interface FieldInterface<T> {
 }
 
 object JsonField {
-    inline fun <reified T> parse(buffer: ByteBuffer): T = KotlinxJson.decodeFromString(Field.String.parse(buffer))
-    inline fun <reified T> encode(data: T): ByteBuffer = Field.String.encode(KotlinxJson.encodeToString<T>(data))
+    inline fun <reified T> parse(buffer: ByteBuffer): T = json.decodeFromString(Field.String.parse(buffer))
+    inline fun <reified T> encode(data: T): ByteBuffer = Field.String.encode(json.encodeToString<T>(data))
 }
 
 object Field {
@@ -74,7 +76,8 @@ object Field {
         return object : FieldInterface<U> {
             override fun parse(buffer: ByteBuffer): U = buffer.getS().toU()
             override fun encode(data: U): ByteBuffer {
-                val size = U::class.companionObject!!.members.find { it.name == "SIZE_BYTES" }!!.call() as Int
+                val size = U::class.companionObject!!.members.find { it.name == "SIZE_BYTES" }!!
+                    .call(U::class.companionObject) as Int
                 return ByteBuffer.allocate(size).putS(data.fromU())
             }
         }

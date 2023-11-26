@@ -34,8 +34,11 @@ data class Packet<P: Any> (
         val idBuffer = Field.VarInt.encode(id)
         val packetSize = buffers.sumOf { buff -> buff.limit() } + idBuffer.limit()
         val sizeBuffer = Field.VarInt.encode(packetSize)
-        val concatenated = ByteBuffer.allocate(sizeBuffer.limit() + packetSize).put(sizeBuffer)
-        buffers.forEach { buff -> concatenated.put(buff) }
+        val concatenated = ByteBuffer.allocate(sizeBuffer.limit() + packetSize)
+            .put(sizeBuffer)
+            .put(idBuffer)
+        buffers.forEach { buff -> concatenated.put(buff.position(0)) }
+        concatenated.position(0)
         return concatenated
     }
 }

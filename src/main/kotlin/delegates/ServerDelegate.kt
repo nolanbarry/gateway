@@ -235,11 +235,13 @@ abstract class ServerDelegate {
         port: Int,
         timeout: Duration = DEFAULT_TIMEOUT
     ): Boolean {
-        return runCatching {
+        val attempt = runCatching {
             val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, port) {
                 socketTimeout = timeout.inWholeMilliseconds
             }
             withContext(Dispatchers.IO) { socket.close() }
-        }.isSuccess
+        }
+        attempt.exceptionOrNull()?.let { log.error(it) { " " } }
+        return attempt.isSuccess
     }
 }

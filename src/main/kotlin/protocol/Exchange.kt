@@ -2,15 +2,14 @@ package com.nolanbarry.gateway.protocol
 
 import com.nolanbarry.gateway.delegates.ServerDelegate
 import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.STARTED
-import com.nolanbarry.gateway.utils.getLogger
 import com.nolanbarry.gateway.model.*
 import com.nolanbarry.gateway.protocol.packet.*
+import com.nolanbarry.gateway.utils.getLogger
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.random.Random
-import kotlin.reflect.jvm.jvmName
 
 class Exchange(
     private val serverDelegate: ServerDelegate,
@@ -20,10 +19,9 @@ class Exchange(
     enum class State { AWAITING_HANDSHAKE, STATUS_REQUEST, LOGIN, CLOSED }
     enum class PostPacketAction { CONTINUE, END_MONITORING, END_EXCHANGE }
 
-    private var state = State.AWAITING_HANDSHAKE
-    private val exchangeState = State.AWAITING_HANDSHAKE
     private val clientPacketQueue = PacketQueue(client.openReadChannel())
     private val toClient = client.openWriteChannel(autoFlush = true)
+    private var exchangeState = State.AWAITING_HANDSHAKE
     private var server: Socket? = null
 
     private val exchangeId = Random.nextBytes(3).joinToString("") { it.toUByte().toString(16) }
@@ -56,11 +54,10 @@ class Exchange(
         while (exchangeState != State.CLOSED) {
             val nextPacket = clientPacketQueue.consume()
 
-            val handler = when (state) {
+            val handler = when (exchangeState) {
                 State.AWAITING_HANDSHAKE -> ::handleHandshakePacket
                 State.STATUS_REQUEST -> ::handleStatusRequestPacket
-                State.LOGIN -> throw IllegalStateException("Packet intercept has ceased")
-                State.CLOSED -> throw IllegalStateException("Exchange is closed")
+                else -> throw IllegalStateException("Packet intercept has ceased (state: $exchangeState)")
             }
 
             val actionToTake = handler(nextPacket)
@@ -83,14 +80,14 @@ class Exchange(
                 log.debug { "Handshake packet" }
 
                 val handshake = packet.interpretAs<Client.Handshake>()
-                state = when (val nextState = handshake.payload.nextState) {
+                exchangeState = when (val nextState = handshake.payload.nextState) {
                     1 -> State.STATUS_REQUEST
                     2 -> State.LOGIN
                     else -> throw InvalidDataException("Invalid next state $nextState")
                 }
 
-                log.debug { "Next state: ${state.name}" }
-                if (state == State.LOGIN) {
+                log.debug { "Next state: ${exchangeState.name}" }
+                if (exchangeState == State.LOGIN) {
                     initiateLogin()
                     PostPacketAction.END_MONITORING
                 } else PostPacketAction.CONTINUE
@@ -183,7 +180,7 @@ class Exchange(
             val toServer = openServerConnection(State.STATUS_REQUEST)
             val serverPacketQueue = PacketQueue(server!!.openReadChannel())
 
-            toServer.writeFully(Packet(0, Client.StatusRequest()).encode())
+            toServer.writeFully(Packet(0x00, Client.StatusRequest()).encode())
 
             val response = serverPacketQueue.consume().interpretAs<Server.StatusResponse>()
 

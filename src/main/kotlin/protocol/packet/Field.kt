@@ -4,7 +4,6 @@ import com.nolanbarry.gateway.model.InvalidDataException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.nio.ByteBuffer
-import kotlin.reflect.full.companionObject
 
 val json = Json
 
@@ -67,26 +66,29 @@ object Field {
         }
     }
 
-    private inline fun <reified U, S> numberFieldCreator(
+    private inline fun <reified U, S> numberField(
         crossinline getS: ByteBuffer.() -> S,
         crossinline putS: ByteBuffer.(S) -> ByteBuffer,
         crossinline toU: S.() -> U,
-        crossinline fromU: U.() -> S
+        crossinline fromU: U.() -> S,
+        numBytes: Int
     ): FieldInterface<U> {
         return object : FieldInterface<U> {
             override fun parse(buffer: ByteBuffer): U = buffer.getS().toU()
             override fun encode(data: U): ByteBuffer {
-                val size = U::class.companionObject!!.members.find { it.name == "SIZE_BYTES" }!!
-                    .call(U::class.companionObject) as Int
-                return ByteBuffer.allocate(size).putS(data.fromU())
+                return ByteBuffer.allocate(numBytes).putS(data.fromU()).position(0)
             }
         }
     }
 
-    val UnsignedByte = numberFieldCreator(ByteBuffer::get, ByteBuffer::put, Byte::toUByte, UByte::toByte)
-    val UnsignedShort = numberFieldCreator(ByteBuffer::getShort, ByteBuffer::putShort, Short::toUShort, UShort::toShort)
-    val UnsignedLong = numberFieldCreator(ByteBuffer::getLong, ByteBuffer::putLong, Long::toULong, ULong::toLong)
-    val SignedLong = numberFieldCreator(ByteBuffer::getLong, ByteBuffer::putLong, Long::toLong, Long::toLong)
+    val UnsignedByte =
+        numberField(ByteBuffer::get, ByteBuffer::put, Byte::toUByte, UByte::toByte, UByte.SIZE_BYTES)
+    val UnsignedShort =
+        numberField(ByteBuffer::getShort, ByteBuffer::putShort, Short::toUShort, UShort::toShort, UShort.SIZE_BYTES)
+    val UnsignedLong =
+        numberField(ByteBuffer::getLong, ByteBuffer::putLong, Long::toULong, ULong::toLong, ULong.SIZE_BYTES)
+    val SignedLong =
+        numberField(ByteBuffer::getLong, ByteBuffer::putLong, Long::toLong, Long::toLong, Long.SIZE_BYTES)
 
     val Json = JsonField
 }

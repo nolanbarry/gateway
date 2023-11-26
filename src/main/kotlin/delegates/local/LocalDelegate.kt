@@ -34,6 +34,7 @@ class LocalDelegate(
     init {
         Runtime.getRuntime().addShutdownHook(object : Thread() {
             override fun run() {
+                log.info { "Stopping Minecraft server" }
                 serverProcess?.destroy()
             }
         })
@@ -86,10 +87,9 @@ class LocalDelegate(
         if (serverProcess?.isAlive != true) throw IncompatibleServerStateException("Server is not running")
 
         serverProcess.destroy()
-        withTimeoutOrNull(MAXIMUM_WAIT_FOR_STOP.inWholeMilliseconds) {
+        withTimeoutOrNull(MAXIMUM_WAIT_FOR_STOP) {
             serverProcess.waitFor()
         } ?: serverProcess.destroyForcibly().waitFor()
-
 
         Unit
     }

@@ -1,9 +1,15 @@
 package com.nolanbarry.gateway.protocol.packet
 
 import com.nolanbarry.gateway.model.InvalidDataException
+import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
 import java.nio.ByteBuffer
+import kotlin.reflect.KClass
+import kotlin.reflect.KType
+import kotlin.reflect.full.createType
 
 val json = Json
 
@@ -13,7 +19,10 @@ interface FieldInterface<T> {
 }
 
 object JsonField {
-    inline fun <reified T> parse(buffer: ByteBuffer): T = json.decodeFromString(Field.String.parse(buffer))
+    fun parse(buffer: ByteBuffer, to: KType): Any = json.decodeFromString(
+        serializer(to) as KSerializer<Any>, Field.String.parse(buffer)
+    )
+
     inline fun <reified T> encode(data: T): ByteBuffer = Field.String.encode(json.encodeToString<T>(data))
 }
 

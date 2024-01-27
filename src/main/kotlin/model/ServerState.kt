@@ -34,9 +34,12 @@ data class Players(
 )
 
 @Serializable
+@OptIn(ExperimentalSerializationApi::class)
 data class ServerState(
     val version: Version,
+
     /** The message to display in the server list (aka as "message of the day" or "motd") */
+    @Serializable(with = StringToChatDeserializer::class)
     val description: Chat,
     val players: Players,
     /** A base64-encoded 64x64 icon to display in the server list */

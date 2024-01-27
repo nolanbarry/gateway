@@ -6,6 +6,7 @@ import com.nolanbarry.gateway.model.UnrecoverableServerException
 import com.nolanbarry.gateway.utils.asFlow
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transform
 import java.nio.file.Path
 import kotlin.time.DurationUnit
@@ -17,9 +18,9 @@ class LocalDelegate(
 ) : ServerDelegate() {
 
     companion object {
-        private const val EULA_TEXT =
-            "You need to agree to the EULA in order to run the server. Go to eula.txt for more info."
-        private const val SERVER_STARTING = "Starting minecraft server version"
+        private const val EULA_TEXT = "You need to agree to the EULA in order to run the server."
+        private const val SERVER_STARTING = "Starting minecraft"
+        private const val LINGERING_SERVER = "session.lock: already locked (possibly by other Minecraft instance?)"
         private val MAXIMUM_WAIT_FOR_STOP = 10.toDuration(DurationUnit.SECONDS)
         private val TIMEOUT = 25.toDuration(DurationUnit.SECONDS)
     }
@@ -65,10 +66,13 @@ class LocalDelegate(
             ?.bufferedReader()
             ?.asFlow()
             ?.transform { log.info { it }; emit(it) }
-            ?.firstOrNull { listOf(EULA_TEXT, SERVER_STARTING).any(it::contains) }
+            ?.firstOrNull { listOf(EULA_TEXT, SERVER_STARTING, LINGERING_SERVER).any(it::contains) }
             ?: throw IncompatibleServerStateException("Server startup failed")
 
-        if (EULA_TEXT in output) throw UnrecoverableServerException(EULA_TEXT)
+        if (LINGERING_SERVER in output) {
+            killProcessUsingPort()
+            throw IncompatibleServerStateException("Another server was using the port, try again")
+        } else if (EULA_TEXT in output) throw UnrecoverableServerException(EULA_TEXT)
 
         log.info { "Local server started!" }
         log.info { "Waiting for it to be available" }
@@ -77,6 +81,8 @@ class LocalDelegate(
             while (!isAcceptingConnections("localhost", localServerPort))
                 delay(500)
         }
+
+        log.info { "Server is available" }
     }
 
     override suspend fun stopServer() = withContext(Dispatchers.IO) {
@@ -96,6 +102,20 @@ class LocalDelegate(
 
     override suspend fun getServerAddress(): Pair<String, Int> {
         return "localhost" to localServerPort
+    }
+
+    private fun killProcessUsingPort() = runBlocking {
+        log.info { "Killing process using port $localServerPort" }
+        val pid = ProcessBuilder("lsof", "-t", "-i:$localServerPort")
+            .start().inputStream.bufferedReader().asFlow().toList().firstOrNull()
+        if (pid == null) {
+            log.debug { "No process is using port $localServerPort" }
+        } else {
+            log.debug { "Process $pid is using port $localServerPort" }
+            ProcessBuilder("kill", pid)
+                .start().inputStream.bufferedReader().asFlow().collect { log.info { it } }
+        }
+
     }
 
 }

@@ -1,12 +1,22 @@
 package com.nolanbarry.gateway.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.*
 
 @Serializable
 data class Event(
     val action: String,
     val content: Chat
 )
+
+/** Deserialize a [Chat] object from a json object (same as Chat.serializer) or from a string. */
+class StringToChatDeserializer : JsonTransformingSerializer<Chat>(Chat.serializer()) {
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        return if (element is JsonPrimitive)
+            buildJsonObject { put("text", element.jsonPrimitive.content) }
+        else element
+    }
+}
 
 @Serializable
 data class Chat(

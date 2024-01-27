@@ -10,14 +10,19 @@ import kotlin.reflect.jvm.jvmName
 
 typealias VarInt = Int
 
-data class Packet<P: Any> (
+data class Packet<P : Any>(
     val id: VarInt,
     val payload: P
 ) {
     fun encode(): ByteBuffer {
         // Get a list of the fields in the payload by calling each property's getter
-        val definition = payload::class.memberProperties.map {
-                prop -> prop.getter.call(payload) ?: throw IllegalArgumentException("Packet property ${prop.name} is null")
+        val orderedPropertyNames = payload::class.primaryConstructor!!.parameters.map { it.name }
+        val orderedProperties = orderedPropertyNames.map { name ->
+            payload::class.memberProperties.find { it.name == name }
+                ?: throw IllegalStateException("Primary constructor contains non-val arg")
+        }
+        val definition = orderedProperties.map { prop ->
+            prop.getter.call(payload) ?: throw IllegalArgumentException("Packet property ${prop.name} is null")
         }
         val buffers = definition.map { field ->
             when (field) {
@@ -43,7 +48,7 @@ data class Packet<P: Any> (
     }
 }
 
-data class RawPacket (
+data class RawPacket(
     val id: VarInt,
     /** Unparsed information unique to this packet */
     val payload: ByteBuffer
@@ -65,8 +70,10 @@ data class RawPacket (
                 val payloadLength = Field.VarInt.parse(window)
                 if (payloadLength == 0)
                     throw InvalidDataException("Invalid packet")
-                val actualPayloadLength = payloadLength - window.position()
+                val lengthOfLength = window.position()
                 val id = Field.VarInt.parse(window)
+                val lengthOfId = window.position() - lengthOfLength
+                val actualPayloadLength = payloadLength - lengthOfId
 
                 val payload = ByteBuffer.allocate(actualPayloadLength)
                 repeat(actualPayloadLength) { payload.put(window.get()) }
@@ -84,7 +91,7 @@ data class RawPacket (
         }
     }
 
-    inline fun <reified T : Any>  interpretAs(): Packet<T> {
+    inline fun <reified T : Any> interpretAs(): Packet<T> {
         val definition = T::class.primaryConstructor!!.parameters
         val parameters: List<Any> = definition.map { field ->
             when (field.type.classifier) {
@@ -94,14 +101,12 @@ data class RawPacket (
                 UShort::class -> Field.UnsignedShort.parse(payload)
                 ULong::class -> Field.UnsignedLong.parse(payload)
                 Long::class -> Field.SignedLong.parse(payload)
-                else -> Field.Json.parse(payload)
+                else -> Field.Json.parse(payload, field.type)
             }
         }
 
-        return Packet(
-            id = this.id,
-            T::class.primaryConstructor!!.call(*parameters.toTypedArray<Any>())
-        )
+        val payload = T::class.primaryConstructor!!.call(args = parameters.toTypedArray())
+        return Packet(this.id, payload)
     }
 }
 
@@ -112,6 +117,7 @@ object Client {
         val serverPort: UShort,
         val nextState: VarInt
     )
+
     class StatusRequest
     data class PingRequest(val pingPayload: Long)
 }

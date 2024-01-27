@@ -24,7 +24,8 @@ class PacketQueue(private val readChannel: ByteReadChannel) {
     fun end(): Pair<ByteBuffer, ByteReadChannel> {
         if (closed) throw RuntimeException("The packet queue is closed.")
         closed = true
-        return buffer to readChannel
+        val remainingBuffer = buffer.asReadOnlyBuffer().position(0).limit(buffer.position())
+        return remainingBuffer to readChannel
     }
 
     /** Suspend until the next `RawPacket` is available and return it */

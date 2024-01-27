@@ -10,10 +10,12 @@ import com.nolanbarry.gateway.protocol.packet.Packet
 import com.nolanbarry.gateway.protocol.packet.Server
 import com.nolanbarry.gateway.utils.*
 import io.ktor.network.sockets.*
+import io.ktor.util.cio.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.datetime.Clock
+import java.nio.ByteBuffer
 import kotlin.reflect.full.isSubclassOf
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
@@ -39,7 +41,7 @@ abstract class ServerDelegate {
     companion object {
         private val BACKOFF = 3.toDuration(DurationUnit.SECONDS)
         private val DEFAULT_TIMEOUT = 1.toDuration(DurationUnit.SECONDS)
-        private val MAX_SERVER_ACTION_ATTEMPTS = 5
+        private const val MAX_SERVER_ACTION_ATTEMPTS = 5
 
         /** TODO: Load this from gateway configuration or elsewhere defined at compile-time
          * `delegate.properties` just contains the information used to find and build the delegate class at runtime.
@@ -172,51 +174,55 @@ abstract class ServerDelegate {
      * players online, message of the day, version, etc. Distinct from server *status*: see [ServerStatus] */
     private suspend fun getState(): ServerState = coroutineScope {
         val (socket, address, port) = openSocket()
-        val packetQueue = PacketQueue(socket.openReadChannel())
-        val toServer = socket.openWriteChannel(autoFlush = true)
-
-        toServer.writeFully(
-            Packet(
-                0, Client.Handshake(
-                    protocolVersion = Protocol.v1_20_2,
+        socket.use {
+            val packetQueue = PacketQueue(socket.openReadChannel())
+            val toServer = socket.openWriteChannel(autoFlush = true)
+            val handshake = Packet(
+                0,
+                Client.Handshake(
+                    protocolVersion = Protocol.v1_20_4,
                     serverAddress = address,
                     serverPort = port.toUShort(),
-                    nextState = Exchange.State.STATUS_REQUEST.ordinal
-                )).encode())
-        toServer.writeFully(Packet(0, Client.StatusRequest()).encode())
+                    nextState = Exchange.State.STATUS_REQUEST.ordinal)
+            ).encode()
+            val statusRequest = Packet(0, Client.StatusRequest()).encode()
 
-        val response = packetQueue.consume().interpretAs<Server.StatusResponse>()
+            toServer.writeFully(handshake)
+            toServer.writeFully(statusRequest)
 
-        socket.close()
-
-        response.payload.response
+            val response = packetQueue.consume().interpretAs<Server.StatusResponse>()
+            response.payload.response
+        }
     }
 
     /** Update internal knowledge of server state (player count) and stop server if `config.timeout` time has elapsed
      * with no players. */
     private suspend fun checkup() = coroutineScope {
         runCatching {
-            if (state == STOPPED) {
-                playerCount = 0
-                timeEmpty = Duration.ZERO
-                return@coroutineScope
-            } else if (state == UNKNOWN) {
-                log.debug { "Skipping checkup because server state is unknown" }
-                return@coroutineScope
+            when (state) {
+                UNKNOWN -> log.debug { "Skipping checkup because server state is unknown" }
+                STOPPED, STOPPING, STARTING -> {
+                    playerCount = 0
+                    timeEmpty = Duration.ZERO
+                }
+
+                STARTED -> {
+                    val status = getState()
+                    playerCount = status.players.online
+                    val now = Clock.System.now()
+                    if (playerCount == 0) {
+                        timeEmpty += lastCheckup - now
+
+                        if (timeEmpty >= GatewayConfiguration.timeout) {
+                            timeEmpty = Duration.ZERO
+                            waitForServerToBe(STOPPED)
+                        }
+                    } else timeEmpty = Duration.ZERO
+                    lastCheckup = now
+                }
             }
 
-            val status = getState()
-            playerCount = status.players.online
-            val now = Clock.System.now()
-            if (playerCount == 0) {
-                timeEmpty += lastCheckup - now
 
-                if (timeEmpty >= GatewayConfiguration.timeout) {
-                    timeEmpty = Duration.ZERO
-                    waitForServerToBe(STOPPED)
-                }
-            } else timeEmpty = Duration.ZERO
-            lastCheckup = now
         }.onFailure { exception ->
             log.error(exception) { "Server checkup failed." }
         }
@@ -241,7 +247,7 @@ abstract class ServerDelegate {
             }
             withContext(Dispatchers.IO) { socket.close() }
         }
-        attempt.exceptionOrNull()?.let { log.error(it) { " " } }
+        log.debug { "Connection to $address:$port ${if (attempt.isSuccess) "succeeded" else "failed"}" }
         return attempt.isSuccess
     }
 }

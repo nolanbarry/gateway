@@ -5,8 +5,11 @@ import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.STARTED
 import com.nolanbarry.gateway.model.*
 import com.nolanbarry.gateway.protocol.packet.*
 import com.nolanbarry.gateway.utils.getLogger
+import com.nolanbarry.gateway.utils.log
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.random.Random
@@ -28,9 +31,10 @@ class Exchange(
     private val log = getLogger("ex-$exchangeId")
 
     companion object {
-        suspend fun pipe(source: ByteReadChannel, dest: ByteWriteChannel) = coroutineScope {
-            launch {
-                runCatching { while (true) dest.writeByte(source.readByte()) }
+        @OptIn(DelicateCoroutinesApi::class)
+        suspend fun pipe(source: ByteReadChannel, dest: ByteWriteChannel) = GlobalScope.launch {
+            runCatching { while (true) dest.writeByte(source.readByte()) }.exceptionOrNull()?.let {
+                log.error(it) { "Pipe failed" }
             }
         }
     }
@@ -41,9 +45,9 @@ class Exchange(
             log.info { "Exchange completed successfully" }
         } catch (e: ConnectionClosedException) {
             log.info { "Client closed connection" }
+            close()
         } catch (e: Throwable) {
             log.error(e) { "Exchange completed exceptionally: '${e::class.simpleName}'" }
-        } finally {
             close()
         }
     }
@@ -62,7 +66,7 @@ class Exchange(
 
             val actionToTake = handler(nextPacket)
 
-            if (actionToTake == PostPacketAction.END_MONITORING) close()
+            if (actionToTake == PostPacketAction.END_EXCHANGE) close()
 
             when (actionToTake) {
                 PostPacketAction.END_EXCHANGE,
@@ -139,8 +143,10 @@ class Exchange(
 
         toServer.writeFully(remainingBuffer)
 
-        pipe(fromServer, toClient)
-        pipe(fromClient, toServer)
+        ActiveConnectionManager.register(
+            fromClient to toClient,
+            fromServer to toServer
+        )
     }
 
     /** Open a socket to the server, starting the server if it is offline. `this.server` is filled with the socket
@@ -158,7 +164,7 @@ class Exchange(
             .also { this.server = it.first }
 
         val handshakePayload = Client.Handshake(
-            protocolVersion = Protocol.v1_20_1,
+            protocolVersion = Protocol.v1_20_4,
             serverAddress = address,
             serverPort = port.toUShort(),
             nextState = intent.ordinal
@@ -189,7 +195,7 @@ class Exchange(
             log.debug { "Server is offline, sending default offline status response" }
             // Message will be cryptic if state is UNKNOWN
             return ServerState(
-                version = Version(name = "1.20.1 (Gated)", protocol = Protocol.v1_20_1),
+                version = Version(name = "1.20.2 (Gated)", protocol = Protocol.v1_20_4),
                 players = Players(max = 1, online = 0),
                 description = Chat(text = "Server is ${currentState.name.lowercase()}, connect to start.")
             )

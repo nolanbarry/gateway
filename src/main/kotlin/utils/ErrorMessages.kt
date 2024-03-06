@@ -20,6 +20,10 @@ val UNSUPPORTED_CONSTRUCTION_TYPE = { which: KClass<*>, who: String, what: KClas
 }
 val CLASS_MUST_BE_SUBTYPE_OF =
     { sup: KClass<*>, sub: KClass<*> -> "Class ${sub.jvmName} must be a subtype of ${sup.jvmName}." }
+val ILLEGAL_OPTIONAL_AND_NULLABLE_CONSTRUCTOR_ARG = { name: String, constructor: KClass<*> ->
+    "Parameter '$name' in constructor of ${constructor.jvmName} is both optional and nullable, which gateway does not" +
+            "support loading from a properties file."
+}
 
 /* SERVER DELEGATE */
 val FAILED_TO_DO_AFTER_X_ATTEMPTS = { what: String, attempts: Int -> "Failed to $what server after $attempts attempts" }

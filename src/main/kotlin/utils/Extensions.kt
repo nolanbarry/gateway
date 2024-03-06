@@ -41,10 +41,17 @@ fun <T: Any> Properties.loadInto(dataClass: KClass<T>): T {
         val name = param.name ?: "Unnamed parameter"
         val property = getProperty(name)
 
+        // Nullable with a default value is not allowed because it's ambiguous whether no provided value should
+        // use the default value or be null
+        if (param.isOptional && param.type.isMarkedNullable)
+            throw IllegalArgumentException(ILLEGAL_OPTIONAL_AND_NULLABLE_CONSTRUCTOR_ARG(name, dataClass))
+        // Property must be defined in properties file if it is not null and has no default argument
         val propertyMustBeDefined = !param.isOptional && !param.type.isMarkedNullable
-        if (property == null && propertyMustBeDefined)
-            throw MisconfigurationException(PROPERTY_IS_REQUIRED_BUT_MISSING(name))
-        else if (property == null) return@associateNotNull null
+        if (property == null) {
+            if (propertyMustBeDefined) throw MisconfigurationException(PROPERTY_IS_REQUIRED_BUT_MISSING(name))
+            else if (param.isOptional) return@associateNotNull null
+            else return@associateNotNull param to null
+        }
 
         param to when (val type = param.type.jvmErasure) {
             String::class -> property

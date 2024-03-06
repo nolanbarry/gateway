@@ -43,25 +43,18 @@ abstract class ServerDelegate {
         private val DEFAULT_TIMEOUT = 1.toDuration(DurationUnit.SECONDS)
         private const val MAX_SERVER_ACTION_ATTEMPTS = 5
 
-        /** TODO: Load this from gateway configuration or elsewhere defined at compile-time
-         * `delegate.properties` just contains the information used to find and build the delegate class at runtime.
-         * A single `delegate.properties` file will be included on the classpath building a jar. */
-        private const val DELEGATE_PROPERTIES_PATH = "/local/delegate.properties"
-
         /** Retrieve the ServerDelegate implementation chosen at build time.
          * @throws IllegalArgumentException If a programming or internal configuration error occurred
          * @throws MisconfigurationException If a properties file is misconfigured */
         fun load(): ServerDelegate {
-            val properties = ResourceLoader.loadProperties(DELEGATE_PROPERTIES_PATH)
-            val packageName = properties.retrieve("package")
-
+            val delegateName = GatewayConfiguration.delegate
             val log = getLogger {}
 
             val delegatesPackage = this::class.java.packageName
-            val delegateClasspath = "$delegatesPackage.$packageName.${packageName.capitalize()}Delegate"
+            val delegateClasspath = "$delegatesPackage.$delegateName.${delegateName.capitalize()}Delegate"
 
             log.debug { "Building server delegate:" }
-            log.debug { "Configured package: $packageName" }
+            log.debug { "Configured package: $delegateName" }
 
             try {
                 log.debug { "Looking for delegate implementation at $delegateClasspath" }

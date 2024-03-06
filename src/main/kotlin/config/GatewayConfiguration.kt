@@ -1,5 +1,6 @@
 package com.nolanbarry.gateway.config
 
+import com.nolanbarry.gateway.model.MisconfigurationException
 import com.nolanbarry.gateway.utils.*
 import com.nolanbarry.gateway.utils.ResourceLoader.loadProperties
 import java.util.Properties
@@ -28,6 +29,7 @@ object GatewayConfiguration {
     var protocol: String by lateinitval()
     var timeout: Duration by lateinitval()
     var frequency: Duration by lateinitval()
+    var delegate: String by lateinitval()
 
     var propertyFile: Properties by lateinitval()
 
@@ -43,6 +45,7 @@ object GatewayConfiguration {
 
         propertyFile = loadProperties(propertiesPath)
 
+        delegate = propertyFile.retrieve("delegate")
         port = propertyFile.retrieve("port", DEFAULT_GATEWAY_PORT) { it.toInt() }
         protocol = propertyFile.retrieve("protocol")
         timeout = propertyFile.retrieve("timeout", DEFAULT_TIMEOUT) { it.toDuration(DurationUnit.SECONDS) }

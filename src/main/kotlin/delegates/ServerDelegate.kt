@@ -173,7 +173,7 @@ abstract class ServerDelegate {
             val handshake = Packet(
                 0,
                 Client.Handshake(
-                    protocolVersion = Protocol.v1_20_4,
+                    protocolVersion = GatewayConfiguration.protocol.toInt(),
                     serverAddress = address,
                     serverPort = port.toUShort(),
                     nextState = Exchange.State.STATUS_REQUEST.ordinal)

@@ -1,5 +1,6 @@
 package com.nolanbarry.gateway.protocol
 
+import com.nolanbarry.gateway.config.GatewayConfiguration
 import com.nolanbarry.gateway.delegates.ServerDelegate
 import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.STARTED
 import com.nolanbarry.gateway.model.*
@@ -164,7 +165,7 @@ class Exchange(
             .also { this.server = it.first }
 
         val handshakePayload = Client.Handshake(
-            protocolVersion = Protocol.v1_20_4,
+            protocolVersion = GatewayConfiguration.protocol.toInt(),
             serverAddress = address,
             serverPort = port.toUShort(),
             nextState = intent.ordinal
@@ -195,7 +196,7 @@ class Exchange(
             log.debug { "Server is offline, sending default offline status response" }
             // Message will be cryptic if state is UNKNOWN
             return ServerState(
-                version = Version(name = "1.20.2 (Gated)", protocol = Protocol.v1_20_4),
+                version = Version(name = "(Gated)", protocol = GatewayConfiguration.protocol.toInt()),
                 players = Players(max = 1, online = 0),
                 description = Chat(text = "Server is ${currentState.name.lowercase()}, connect to start.")
             )

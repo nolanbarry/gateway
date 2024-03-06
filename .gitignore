@@ -44,4 +44,4 @@ bin/
 ### Local server resources ###
 local-server/
 
-src/main/resources/gateway.properties
+/src/main/resources/gateway.properties

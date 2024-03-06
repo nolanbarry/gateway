@@ -4,7 +4,6 @@ import aws.sdk.kotlin.services.ec2.Ec2Client
 import aws.sdk.kotlin.services.ec2.describeInstances
 import aws.sdk.kotlin.services.ec2.startInstances
 import aws.sdk.kotlin.services.ec2.stopInstances
-import com.nolanbarry.gateway.config.GatewayConfiguration
 import com.nolanbarry.gateway.delegates.ServerDelegate
 import com.nolanbarry.gateway.model.IncompatibleServerStateException
 import com.nolanbarry.gateway.model.MisconfigurationException
@@ -56,8 +55,8 @@ class AwsDelegate(
                 val ip = description.privateIpAddress
                     ?: throw IllegalStateException("Instance $instanceId has no IP address")
 
-                val serverRunning = isAcceptingConnections(ip, serverPort, 1.seconds)
-                if (serverRunning) ServerStatus.STARTED else ServerStatus.STARTING
+                val mcServerRunning = isAcceptingConnections(ip, serverPort, 1.seconds)
+                if (mcServerRunning) ServerStatus.STARTED else ServerStatus.STARTING
             }
 
             else -> instanceStatus

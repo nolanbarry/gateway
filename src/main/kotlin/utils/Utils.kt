@@ -23,15 +23,23 @@ suspend fun createMetronome(interval: Duration) = flow {
     }
 }
 
-class lateinitval<T: Any> {
+@Suppress("UNCHECKED_CAST")
+class LateInitVal<T> {
+    @Volatile
+    var isInitialized = false
+    @Volatile
     var backing: T? = null
 
-    operator fun getValue(thisRef: Any?, property: KProperty<*>): T {
-        return backing ?: throw IllegalStateException("${property.name} was accessed before being initialized")
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): T = synchronized(this) {
+        if (!isInitialized) throw IllegalStateException("${property.name} was accessed before being initialized")
+        return backing as T
     }
 
-    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
-        if (backing != null) throw IllegalStateException("Attempting to initialize ${property.name} a second time")
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T) = synchronized(this) {
+        if (isInitialized) throw IllegalStateException("Attempting to initialize ${property.name} a second time")
+        isInitialized = true
         backing = value
     }
 }
+
+fun <T> lateinitval() = LateInitVal<T>()

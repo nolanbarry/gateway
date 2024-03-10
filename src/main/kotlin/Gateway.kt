@@ -8,13 +8,15 @@ import com.nolanbarry.gateway.utils.getLogger
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.io.File
+import kotlin.reflect.KFunction
 
-suspend fun main(args: Array<String>) = coroutineScope {
+suspend fun main(args: Array<String>): Unit = coroutineScope {
 
     val log = getLogger {}
 
     log.debug { "Initializing gateway configuration" }
-    GatewayConfiguration.init(args)
+    GatewayConfiguration.init(args, ::main::class)
 
     val serverDelegate = ServerDelegate.load()
 

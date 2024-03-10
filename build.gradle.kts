@@ -1,6 +1,9 @@
+import com.github.jengelman.gradle.plugins.shadow.ShadowExtension
+
 plugins {
     kotlin("jvm") version "1.9.0"
     kotlin("plugin.serialization") version "1.9.0"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
     application
 }
 
@@ -9,6 +12,10 @@ version = "0.1-beta"
 
 repositories {
     mavenCentral()
+}
+
+application {
+    mainClass = "com.nolanbarry.gateway.GatewayKt"
 }
 
 dependencies {
@@ -23,26 +30,15 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     implementation("org.slf4j:slf4j-simple:2.0.3")
 
-   implementation("aws.sdk.kotlin:ec2-jvm:1.0.69")
+    implementation("aws.sdk.kotlin:ec2-jvm:1.0.69")
 }
 
 kotlin {
     jvmToolchain(19)
 }
 
-application {
-    mainClass.set("com.nolanbarry.gateway.GatewayKt")
-}
-
 tasks {
     test {
         useJUnitPlatform()
     }
-
-    register<Jar>("fatJar") {
-        dependsOn("compileJava")
-        dependsOn("compileKotlin")
-        archiveClassifier.set("fat")
-    }
-
 }

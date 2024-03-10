@@ -59,15 +59,20 @@ class CommandLineArgs {
             val allOptions = allAliases.map { alias ->
                 options[alias] ?: throw IllegalArgumentException("Got unexpected command line arg $next")
             }
-            allOptions.forEach { option -> seen.add(option) || throw IllegalArgumentException("'${option.name}' or an alias was provided more than once") }
+            allOptions.forEach { option ->
+                seen.add(option) ||
+                        throw IllegalArgumentException("'${option.name}' or an alias was provided more than once")
+            }
             val allAreFlags = allOptions.all { option -> option is Flag }
-            if (!allAreFlags && isMultiFlag) throw IllegalArgumentException("Multi-flag argument $next contains an option which requires an argument")
+            if (!allAreFlags && isMultiFlag)
+                throw IllegalArgumentException("Multi-flag argument $next contains an option which requires an argument")
             if (allAreFlags) {
                 results.putAll(allOptions.associate { option -> option.name to true })
             } else {
                 val option = allOptions.first()
                 if (option !is Parameter<*>) throw RuntimeException("Impossible state")
-                if (workingArgs.isEmpty()) throw IllegalArgumentException("Missing parameter associated with option $next")
+                if (workingArgs.isEmpty())
+                    throw IllegalArgumentException("Missing parameter associated with option $next")
                 val parameter = workingArgs.removeFirst()
                 val value = option.parse(parameter)
                 value ?: throw IllegalArgumentException("Argument $parameter to $next did not evaluate to a value")

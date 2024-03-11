@@ -18,8 +18,8 @@ class AwsDelegate(
     awsRegion: String?
 ) : ServerDelegate() {
 
-    private val region = awsRegion ?: System.getenv()["AWS_REGION"] ?: System.getenv()["AWS_DEFAULT_REGION"]
-        ?: throw MisconfigurationException("No AWS region specified")
+    private val region = awsRegion ?: System.getenv()["AWS_DEFAULT_REGION"]
+    ?: throw MisconfigurationException("No AWS region specified")
     private val ec2 = Ec2Client { region = this@AwsDelegate.region }
 
     private object InstanceState {

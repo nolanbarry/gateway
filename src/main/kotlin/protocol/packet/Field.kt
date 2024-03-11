@@ -11,7 +11,7 @@ import kotlin.reflect.KClass
 import kotlin.reflect.KType
 import kotlin.reflect.full.createType
 
-val json = Json
+val json = Json { ignoreUnknownKeys = true }
 
 interface FieldInterface<T> {
     fun parse(buffer: ByteBuffer): T

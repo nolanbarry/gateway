@@ -1,0 +1,33 @@
+# Used when a release is pushed to GitHub
+# This does not make use of any caching as to ensure a clean build
+name: build-release
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build artifacts
+        run: ./gradlew shadowJar
+
+      - name: Upload assets to GitHub
+        uses: AButler/upload-release-assets@v2.0
+        with:
+          files: 'build/libs/*.jar'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

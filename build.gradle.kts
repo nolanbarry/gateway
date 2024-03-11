@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.nolanbarry"
-version = "0.1-beta"
+version = "0.1.0-beta"
 
 repositories {
     mavenCentral()

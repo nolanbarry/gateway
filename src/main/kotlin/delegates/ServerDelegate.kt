@@ -10,12 +10,10 @@ import com.nolanbarry.gateway.protocol.packet.Packet
 import com.nolanbarry.gateway.protocol.packet.Server
 import com.nolanbarry.gateway.utils.*
 import io.ktor.network.sockets.*
-import io.ktor.util.cio.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.datetime.Clock
-import java.nio.ByteBuffer
 import kotlin.reflect.full.isSubclassOf
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
@@ -190,25 +188,40 @@ abstract class ServerDelegate {
 
     /** Update internal knowledge of server state (player count) and stop server if `config.timeout` time has elapsed
      * with no players. */
-    private suspend fun checkup() = coroutineScope {
+    private suspend fun checkup(): Unit = coroutineScope {
+        log.debug { "Performing server checkup, current state is $state" }
         runCatching {
             when (state) {
-                UNKNOWN -> log.debug { "Skipping checkup because server state is unknown" }
+                UNKNOWN -> {
+                    log.debug { "Attempted to retrieve updated state" }
+                    state = getCurrentState()
+                    if (state == UNKNOWN) {
+                        log.debug { "Nothing changed, state is still $state" }
+                        return@runCatching
+                    }
+                    log.debug { "Server state updated to $state. Rerunning checkup" }
+                    checkup()
+                }
+
                 STOPPED, STOPPING, STARTING -> {
+                    log.debug { "Server is not running" }
                     playerCount = 0
                     timeEmpty = Duration.ZERO
                 }
 
                 STARTED -> {
+                    log.debug { "Server is started" }
                     val status = getState()
                     playerCount = status.players.online
                     val now = Clock.System.now()
                     if (playerCount == 0) {
                         timeEmpty += lastCheckup - now
-
                         if (timeEmpty >= GatewayConfiguration.timeout) {
+                            log.debug { "Server has been empty for greater than ${GatewayConfiguration.timeout}" }
+                            log.debug { "Attempt to shut down" }
                             timeEmpty = Duration.ZERO
                             waitForServerToBe(STOPPED)
+                            log.debug { "Server stopped" }
                         }
                     } else timeEmpty = Duration.ZERO
                     lastCheckup = now

@@ -38,7 +38,7 @@ abstract class ServerDelegate {
 
     companion object {
         private val BACKOFF = 3.toDuration(DurationUnit.SECONDS)
-        private val DEFAULT_TIMEOUT = 1.toDuration(DurationUnit.SECONDS)
+        private val DEFAULT_TIMEOUT = 3.toDuration(DurationUnit.SECONDS)
         private const val MAX_SERVER_ACTION_ATTEMPTS = 5
 
         /** Retrieve the ServerDelegate implementation chosen at build time.
@@ -193,7 +193,7 @@ abstract class ServerDelegate {
         runCatching {
             when (state) {
                 UNKNOWN -> {
-                    log.debug { "Attempted to retrieve updated state" }
+                    log.debug { "Attempting to retrieve updated state" }
                     state = getCurrentState()
                     if (state == UNKNOWN) {
                         log.debug { "Nothing changed, state is still $state" }
@@ -248,6 +248,7 @@ abstract class ServerDelegate {
         timeout: Duration = DEFAULT_TIMEOUT
     ): Boolean {
         val attempt = runCatching {
+            log.debug { "Checking if $address:$port is accepting connections" }
             val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, port) {
                 socketTimeout = timeout.inWholeMilliseconds
             }

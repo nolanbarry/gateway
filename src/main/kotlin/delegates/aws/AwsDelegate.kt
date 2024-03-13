@@ -55,8 +55,13 @@ class AwsDelegate(
                 val ip = description.privateIpAddress
                     ?: throw IllegalStateException("Instance $instanceId has no IP address")
 
-                val mcServerRunning = isAcceptingConnections(ip, serverPort, 1.seconds)
-                if (mcServerRunning) ServerStatus.STARTED else ServerStatus.STARTING
+                val mcServerRunning = isAcceptingConnections(ip, serverPort)
+                if (mcServerRunning) {
+                    ServerStatus.STARTED
+                } else {
+                    log.debug { "Instance is started, but MC server is not reachable" }
+                    ServerStatus.STARTING
+                }
             }
 
             else -> instanceStatus

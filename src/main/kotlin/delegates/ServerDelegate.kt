@@ -204,21 +204,22 @@ abstract class ServerDelegate {
                 }
 
                 STOPPED, STOPPING, STARTING -> {
-                    log.debug { "Server is not running" }
+                    log.debug { "Nothing to check" }
                     playerCount = 0
                     timeEmpty = Duration.ZERO
                 }
 
                 STARTED -> {
-                    log.debug { "Server is started" }
                     val status = getState()
                     playerCount = status.players.online
                     val now = Clock.System.now()
+                    log.debug { "Player count: $playerCount" }
                     if (playerCount == 0) {
-                        timeEmpty += lastCheckup - now
+                        timeEmpty += now - lastCheckup
+                        log.debug { "Time empty: $timeEmpty" }
                         if (timeEmpty >= GatewayConfiguration.timeout) {
                             log.debug { "Server has been empty for greater than ${GatewayConfiguration.timeout}" }
-                            log.debug { "Attempt to shut down" }
+                            log.debug { "Attempting to shut down" }
                             timeEmpty = Duration.ZERO
                             waitForServerToBe(STOPPED)
                             log.debug { "Server stopped" }

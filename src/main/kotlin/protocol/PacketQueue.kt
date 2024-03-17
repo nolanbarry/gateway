@@ -5,8 +5,7 @@ import com.nolanbarry.gateway.protocol.packet.RawPacket
 import io.ktor.utils.io.*
 import kotlinx.coroutines.withTimeout
 import java.nio.ByteBuffer
-import kotlin.time.DurationUnit
-import kotlin.time.toDuration
+import kotlin.time.Duration.Companion.seconds
 
 class PacketQueue(private val readChannel: ByteReadChannel) {
 
@@ -14,7 +13,7 @@ class PacketQueue(private val readChannel: ByteReadChannel) {
         private const val MINIMUM_BUFFER_SIZE = 256
         private const val GROW_THRESHOLD = 0.75
         private const val SHRINK_THRESHOLD = 0.25
-        private val TIMEOUT = 3.toDuration(DurationUnit.SECONDS)
+        private val TIMEOUT = 3.seconds
     }
 
     private var buffer = ByteBuffer.allocate(MINIMUM_BUFFER_SIZE)

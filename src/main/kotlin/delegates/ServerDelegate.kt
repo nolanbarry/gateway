@@ -16,8 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.datetime.Clock
 import kotlin.reflect.full.isSubclassOf
 import kotlin.time.Duration
-import kotlin.time.DurationUnit
-import kotlin.time.toDuration
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(DelicateCoroutinesApi::class)
 abstract class ServerDelegate {
@@ -37,8 +36,8 @@ abstract class ServerDelegate {
     }
 
     companion object {
-        private val BACKOFF = 3.toDuration(DurationUnit.SECONDS)
-        private val DEFAULT_TIMEOUT = 3.toDuration(DurationUnit.SECONDS)
+        private val BACKOFF = 3.seconds
+        private val DEFAULT_TIMEOUT = 3.seconds
         private const val MAX_SERVER_ACTION_ATTEMPTS = 5
 
         /** Retrieve the ServerDelegate implementation chosen at build time.

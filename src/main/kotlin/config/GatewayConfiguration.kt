@@ -11,8 +11,8 @@ import kotlin.io.path.isDirectory
 import kotlin.io.path.pathString
 import kotlin.reflect.KClass
 import kotlin.time.Duration
-import kotlin.time.DurationUnit
-import kotlin.time.toDuration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /** This object loads and encapsulates the `gateway.properties` file, which is the basic configuration file which the
  * user of this program uses to... configure the gateway. These are the options which are available:
@@ -28,8 +28,8 @@ object GatewayConfiguration {
 
     private const val DEFAULT_PROPERTIES_FILENAME = "gateway.properties"
     private const val DEFAULT_GATEWAY_PORT = 25565
-    private val DEFAULT_TIMEOUT = 15.toDuration(DurationUnit.MINUTES)
-    private val DEFAULT_FREQUENCY = 30.toDuration(DurationUnit.SECONDS)
+    private val DEFAULT_TIMEOUT = 15.minutes
+    private val DEFAULT_FREQUENCY = 30.seconds
 
     var port: Int by lateinitval()
     var protocol: String by lateinitval()
@@ -63,8 +63,8 @@ object GatewayConfiguration {
         delegate = propertyFile.retrieve("delegate")
         port = propertyFile.retrieve("port", DEFAULT_GATEWAY_PORT) { it.toInt() }
         protocol = propertyFile.retrieve("protocol")
-        timeout = propertyFile.retrieve("timeout", DEFAULT_TIMEOUT) { it.toDuration(DurationUnit.SECONDS) }
-        frequency = propertyFile.retrieve("frequency", DEFAULT_FREQUENCY) { it.toDuration(DurationUnit.SECONDS) }
+        timeout = propertyFile.retrieve("timeout", DEFAULT_TIMEOUT) { it.toInt().seconds }
+        frequency = propertyFile.retrieve("frequency", DEFAULT_FREQUENCY) { it.toInt().seconds }
     }
 
     data class PotentialResourcePath(val path: String, val onClasspath: Boolean)

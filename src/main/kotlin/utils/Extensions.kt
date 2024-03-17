@@ -12,8 +12,6 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.jvm.jvmErasure
-import kotlin.time.DurationUnit
-import kotlin.time.toDuration
 
 val log = getLogger {}
 
@@ -65,7 +63,6 @@ fun <T: Any> Properties.loadInto(dataClass: KClass<T>): T {
     return constructor.callBy(signature)
 }
 
-fun String.toDuration(unit: DurationUnit) = toInt().toDuration(unit)
 fun String.capitalize() = replaceFirstChar { it.titlecase(Locale.ENGLISH) }
 
 fun <T, K, V> Iterable<T>.associateNotNull(operation: (T) -> Pair<K, V>?): Map<K, V> =

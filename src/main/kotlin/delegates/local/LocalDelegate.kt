@@ -9,8 +9,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transform
 import java.nio.file.Path
-import kotlin.time.DurationUnit
-import kotlin.time.toDuration
+import kotlin.time.Duration.Companion.seconds
 
 class LocalDelegate(
     private val directory: Path,
@@ -21,8 +20,8 @@ class LocalDelegate(
         private const val EULA_TEXT = "You need to agree to the EULA in order to run the server."
         private const val SERVER_STARTING = "Starting minecraft"
         private const val LINGERING_SERVER = "session.lock: already locked (possibly by other Minecraft instance?)"
-        private val MAXIMUM_WAIT_FOR_STOP = 10.toDuration(DurationUnit.SECONDS)
-        private val TIMEOUT = 25.toDuration(DurationUnit.SECONDS)
+        private val MAXIMUM_WAIT_FOR_STOP = 10.seconds
+        private val TIMEOUT = 25.seconds
     }
 
     init {

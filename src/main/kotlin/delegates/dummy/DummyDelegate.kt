@@ -6,7 +6,7 @@ import com.nolanbarry.gateway.model.IncompatibleServerStateException
 
 @Suppress("unused")
 class DummyDelegate(baseConfiguration: BaseConfiguration) : ServerDelegate(baseConfiguration) {
-    override suspend fun getCurrentState(): ServerStatus {
+    override suspend fun getCurrentStatus(): ServerStatus {
         return ServerStatus.STOPPED
     }
 

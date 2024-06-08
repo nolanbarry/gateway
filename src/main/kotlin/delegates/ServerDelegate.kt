@@ -12,8 +12,8 @@ import com.nolanbarry.gateway.protocol.packet.Server
 import com.nolanbarry.gateway.utils.*
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 import kotlin.reflect.full.createType
 import kotlin.reflect.full.isSubclassOf
@@ -39,7 +39,9 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
 
     companion object {
         private val BACKOFF = 3.seconds
-        private val DEFAULT_TIMEOUT = 3.seconds
+        private val DEFAULT_SOCKET_TIMEOUT = 3.seconds
+        private val SERVER_TRANSITION_TIMEOUT = 60.seconds
+        private val SERVER_TRANSITION_PING_FREQUENCY = 1.seconds
         private const val MAX_SERVER_ACTION_ATTEMPTS = 5
 
         /** Retrieve the ServerDelegate implementation chosen at build time.
@@ -78,9 +80,9 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
 
     /** Retrieve the status of the minecraft server *from its source*. This might involve pinging both the cloud
      * provider to make sure the VM is online, and the server itself to confirm that it's accepting connect ions.
-     * Implementations of [getCurrentState] are only required to return [STOPPED] or [STARTED], and [STARTED] should
+     * Implementations of [getCurrentStatus] are only required to return [STOPPED] or [STARTED], and [STARTED] should
      * only be returned the server is accepting player connections (otherwise [STOPPED] is acceptable). */
-    protected abstract suspend fun getCurrentState(): ServerStatus
+    protected abstract suspend fun getCurrentStatus(): ServerStatus
 
     /** Start the server. Throwing a [IncompatibleServerStateException] will cause the abstract class to back off, and
      *  can be thrown if the server can't be started for any reason, although preferred behavior would be to return
@@ -114,51 +116,51 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
         // Locking for the duration of this entire function is conservative, but easy. Realistically there shouldn't
         // be a need for separate routines to be waiting on opposing states, and even if there was, this is one valid
         // solution to resolving that conflict.
-        stateTransition.lock()
+        stateTransition.withLock {
 
-        val pendingStateUpdateChannel = Channel<Unit>(Channel.CONFLATED)
+            var serverActionAttempts = 0
 
-        var serverActionAttempts = 0
-
-        while (desiredState != state) {
-            // Every state has a single "next" state, so we just cycle through them until we reach the desired state.
-            when (state) {
-                UNKNOWN -> state = getCurrentState()
-                STARTING,
-                STOPPING -> pendingStateUpdateChannel.receive()
-
-                STOPPED,
-                STARTED -> {
-                    // Put the server in the next, intermediate state, then actually start/stop server asynchronously,
-                    // notifying the main thread when the server has reached that state.
-                    if (serverActionAttempts >= MAX_SERVER_ACTION_ATTEMPTS) {
-                        val attemptedAction = if (state == STOPPED) "start" else "stop"
-                        throw UnrecoverableServerException(
-                            FAILED_TO_DO_AFTER_X_ATTEMPTS(attemptedAction, MAX_SERVER_ACTION_ATTEMPTS))
+            while (desiredState != state) {
+                // Every state has a single "next" state, so we just cycle through them until we reach the desired state.
+                when (state) {
+                    UNKNOWN -> state = getCurrentStatus()
+                    STARTING,
+                    STOPPING -> withTimeout(SERVER_TRANSITION_TIMEOUT) {
+                        do {
+                            delay(SERVER_TRANSITION_PING_FREQUENCY)
+                            state = getCurrentStatus()
+                        } while (state in listOf(STARTING, STOPPING))
                     }
-                    serverActionAttempts++
-                    state = if (state == STOPPED) STARTING else STOPPING
-                    launch {
-                        try {
-                            state = if (state == STOPPING) {
-                                stopServer()
-                                STOPPED
-                            } else {
-                                startServer()
-                                STARTED
+
+                    STOPPED,
+                    STARTED -> {
+                        // Put the server in the next, intermediate state, then actually start/stop server asynchronously,
+                        if (serverActionAttempts >= MAX_SERVER_ACTION_ATTEMPTS) {
+                            val attemptedAction = if (state == STOPPED) "start" else "stop"
+                            throw UnrecoverableServerException(
+                                FAILED_TO_DO_AFTER_X_ATTEMPTS(attemptedAction, MAX_SERVER_ACTION_ATTEMPTS))
+                        }
+                        serverActionAttempts++
+                        state = if (state == STOPPED) STARTING else STOPPING
+                        launch {
+                            try {
+                                state = if (state == STOPPING) {
+                                    stopServer()
+                                    STOPPED
+                                } else {
+                                    startServer()
+                                    STARTED
+                                }
+                            } catch (e: IncompatibleServerStateException) {
+                                delay(BACKOFF)
+                                state = UNKNOWN
                             }
-                        } catch (e: IncompatibleServerStateException) {
-                            state = UNKNOWN
-                            delay(BACKOFF)
-                        } finally {
-                            pendingStateUpdateChannel.send(Unit)
                         }
                     }
                 }
             }
-        }
 
-        stateTransition.unlock()
+        }
     }
 
     suspend fun openSocket() = coroutineScope {
@@ -201,7 +203,7 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
             when (state) {
                 UNKNOWN -> {
                     log.debug { "Attempting to retrieve updated state" }
-                    state = getCurrentState()
+                    state = getCurrentStatus()
                     if (state == UNKNOWN) {
                         log.debug { "Nothing changed, state is still $state" }
                         return@runCatching
@@ -253,14 +255,12 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
     protected suspend fun isAcceptingConnections(
         address: String,
         port: Int,
-        timeout: Duration = DEFAULT_TIMEOUT
+        timeout: Duration = DEFAULT_SOCKET_TIMEOUT
     ): Boolean {
         val attempt = runCatching {
+            val builder = aSocket(SOCKET_SELECTOR).tcp()
             log.debug { "Checking if $address:$port is accepting connections" }
-            val socket = aSocket(SOCKET_SELECTOR).tcp().connect(address, port) {
-                socketTimeout = timeout.inWholeMilliseconds
-            }
-            withContext(Dispatchers.IO) { socket.close() }
+            withTimeout(timeout.inWholeMilliseconds) { builder.connect(address, port).close() }
         }
         log.debug { "Connection to $address:$port ${if (attempt.isSuccess) "succeeded" else "failed"}" }
         return attempt.isSuccess

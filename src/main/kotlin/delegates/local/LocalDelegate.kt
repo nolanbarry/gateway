@@ -45,7 +45,7 @@ class LocalDelegate(
         })
     }
 
-    override suspend fun getCurrentState(): ServerStatus {
+    override suspend fun getCurrentStatus(): ServerStatus {
         val serverProcess = serverProcess
         return when {
             serverProcess?.isAlive != true -> ServerStatus.STOPPED

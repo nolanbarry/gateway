@@ -1,5 +1,3 @@
-import com.github.jengelman.gradle.plugins.shadow.ShadowExtension
-
 plugins {
     kotlin("jvm") version "1.9.0"
     kotlin("plugin.serialization") version "1.9.0"
@@ -8,7 +6,7 @@ plugins {
 }
 
 group = "com.nolanbarry"
-version = "0.1.5-beta"
+version = "0.1.6-beta"
 
 repositories {
     mavenCentral()

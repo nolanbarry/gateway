@@ -79,13 +79,6 @@ class LocalDelegate(
         } else if (EULA_TEXT in output) throw UnrecoverableServerException(EULA_TEXT)
 
         log.info { "Local server started!" }
-        log.info { "Waiting for it to be available" }
-
-        withTimeout(TIMEOUT) {
-            while (!isAcceptingConnections("localhost", localServerPort))
-                delay(500)
-        }
-
         log.info { "Server is available" }
     }
 

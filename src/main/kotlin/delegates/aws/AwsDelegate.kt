@@ -78,10 +78,10 @@ class AwsDelegate(baseConfiguration: BaseConfiguration) : ServerDelegate(baseCon
 
         when (initialState) {
             InstanceState.STOPPED,
-            InstanceState.RUNNING,
-            InstanceState.PENDING -> withTimeoutOrNull(30.seconds) {
-                while (getCurrentStatus() == ServerStatus.STARTING) delay(1.seconds)
-                if (getCurrentStatus() != ServerStatus.STARTED)
+            InstanceState.PENDING,
+            InstanceState.RUNNING -> withTimeoutOrNull(30.seconds) {
+                while (getCurrentStatus() == ServerStatus.STOPPED) delay(1.seconds)
+                if (getCurrentStatus() !in listOf(ServerStatus.STARTED, ServerStatus.STARTING))
                     throw IncompatibleServerStateException("Server startup failed")
             } ?: throw IncompatibleServerStateException("Server took too long to start")
 
@@ -96,9 +96,10 @@ class AwsDelegate(baseConfiguration: BaseConfiguration) : ServerDelegate(baseCon
 
         when (initialState) {
             InstanceState.RUNNING,
-            InstanceState.STOPPING -> withTimeoutOrNull(30.seconds) {
-                while (getCurrentStatus() == ServerStatus.STOPPING) delay(1.seconds)
-                if (getCurrentStatus() != ServerStatus.STOPPED) null else Unit
+            InstanceState.STOPPING,
+            InstanceState.STOPPED -> withTimeoutOrNull(30.seconds) {
+                while (getCurrentStatus() == ServerStatus.STARTED) delay(1.seconds)
+                if (getCurrentStatus() !in listOf(ServerStatus.STOPPING, ServerStatus.STOPPED)) null else Unit
             } ?: throw IncompatibleServerStateException("Server took too long to stop")
 
             else -> throw IncompatibleServerStateException("Cannot stop server from state $initialState")

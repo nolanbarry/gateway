@@ -1,5 +1,7 @@
 package com.nolanbarry.gateway.delegates.local
 
+import com.nolanbarry.gateway.config.BaseConfiguration
+import com.nolanbarry.gateway.config.property
 import com.nolanbarry.gateway.delegates.ServerDelegate
 import com.nolanbarry.gateway.model.IncompatibleServerStateException
 import com.nolanbarry.gateway.model.UnrecoverableServerException
@@ -8,13 +10,16 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transform
-import java.nio.file.Path
+import kotlin.io.path.Path
 import kotlin.time.Duration.Companion.seconds
 
+@Suppress("unused")
 class LocalDelegate(
-    private val directory: Path,
-    private val localServerPort: Int = 48291
-) : ServerDelegate() {
+    baseConfiguration: BaseConfiguration
+) : ServerDelegate(baseConfiguration) {
+
+    private val directory by property { Path(it)  }
+    private val localServerPort by property(48291) { it.toInt() }
 
     companion object {
         private const val EULA_TEXT = "You need to agree to the EULA in order to run the server."

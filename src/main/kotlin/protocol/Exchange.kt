@@ -1,18 +1,13 @@
 package com.nolanbarry.gateway.protocol
 
-import com.nolanbarry.gateway.config.GatewayConfiguration
 import com.nolanbarry.gateway.delegates.ServerDelegate
 import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.STARTED
 import com.nolanbarry.gateway.model.*
 import com.nolanbarry.gateway.protocol.packet.*
 import com.nolanbarry.gateway.utils.getLogger
-import com.nolanbarry.gateway.utils.log
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 class Exchange(
@@ -23,6 +18,7 @@ class Exchange(
     enum class State { AWAITING_HANDSHAKE, STATUS_REQUEST, LOGIN, CLOSED }
     enum class PostPacketAction { CONTINUE, END_MONITORING, END_EXCHANGE }
 
+    private val configuration = serverDelegate.configuration
     private val clientPacketQueue = PacketQueue(client.openReadChannel())
     private val toClient = client.openWriteChannel(autoFlush = true)
     private var exchangeState = State.AWAITING_HANDSHAKE
@@ -30,15 +26,6 @@ class Exchange(
 
     private val exchangeId = Random.nextBytes(3).joinToString("") { it.toUByte().toString(16) }
     private val log = getLogger("ex-$exchangeId")
-
-    companion object {
-        @OptIn(DelicateCoroutinesApi::class)
-        suspend fun pipe(source: ByteReadChannel, dest: ByteWriteChannel) = GlobalScope.launch {
-            runCatching { while (true) dest.writeByte(source.readByte()) }.exceptionOrNull()?.let {
-                log.error(it) { "Pipe failed" }
-            }
-        }
-    }
 
     suspend fun doIt() {
         try {
@@ -165,7 +152,7 @@ class Exchange(
             .also { this.server = it.first }
 
         val handshakePayload = Client.Handshake(
-            protocolVersion = GatewayConfiguration.protocol.toInt(),
+            protocolVersion = configuration.protocol.toInt(),
             serverAddress = address,
             serverPort = port.toUShort(),
             nextState = intent.ordinal
@@ -196,7 +183,7 @@ class Exchange(
             log.debug { "Server is offline, sending default offline status response" }
             // Message will be cryptic if state is UNKNOWN
             return ServerState(
-                version = Version(name = "(Gated)", protocol = GatewayConfiguration.protocol.toInt()),
+                version = Version(name = "(Gated)", protocol = configuration.protocol.toInt()),
                 players = Players(max = 1, online = 0),
                 description = Chat(text = "Server is ${currentState.name.lowercase()}, connect to start.")
             )

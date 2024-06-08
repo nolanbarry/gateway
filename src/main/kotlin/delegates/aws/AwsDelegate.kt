@@ -4,23 +4,22 @@ import aws.sdk.kotlin.services.ec2.Ec2Client
 import aws.sdk.kotlin.services.ec2.describeInstances
 import aws.sdk.kotlin.services.ec2.startInstances
 import aws.sdk.kotlin.services.ec2.stopInstances
+import com.nolanbarry.gateway.config.BaseConfiguration
+import com.nolanbarry.gateway.config.property
 import com.nolanbarry.gateway.delegates.ServerDelegate
 import com.nolanbarry.gateway.model.IncompatibleServerStateException
-import com.nolanbarry.gateway.model.MisconfigurationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
 @Suppress("unused")
-class AwsDelegate(
-    private val instanceId: String,
-    private val serverPort: Int,
-    awsRegion: String?
-) : ServerDelegate() {
+class AwsDelegate(baseConfiguration: BaseConfiguration) : ServerDelegate(baseConfiguration) {
 
-    private val region = awsRegion ?: System.getenv()["AWS_DEFAULT_REGION"]
-    ?: throw MisconfigurationException("No AWS region specified")
-    private val ec2 = Ec2Client { region = this@AwsDelegate.region }
+    private val instanceId by property()
+    private val serverPort by property { it.toInt() }
+    private val awsRegion by property(defaultValue = System.getenv()["AWS_DEFAULT_REGION"])
+
+    private val ec2 = Ec2Client { region = awsRegion }
 
     private object InstanceState {
         const val PENDING = 0

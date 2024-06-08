@@ -1,6 +1,7 @@
 package com.nolanbarry.gateway.delegates
 
-import com.nolanbarry.gateway.config.GatewayConfiguration
+import com.nolanbarry.gateway.config.BaseConfiguration
+import com.nolanbarry.gateway.config.ConfigurationSource
 import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.*
 import com.nolanbarry.gateway.model.*
 import com.nolanbarry.gateway.protocol.Exchange
@@ -14,12 +15,13 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.datetime.Clock
+import kotlin.reflect.full.createType
 import kotlin.reflect.full.isSubclassOf
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(DelicateCoroutinesApi::class)
-abstract class ServerDelegate {
+abstract class ServerDelegate(val configuration: BaseConfiguration) : ConfigurationSource by configuration {
 
     protected var timeEmpty = Duration.ZERO
     protected var playerCount = 0
@@ -43,8 +45,8 @@ abstract class ServerDelegate {
         /** Retrieve the ServerDelegate implementation chosen at build time.
          * @throws IllegalArgumentException If a programming or internal configuration error occurred
          * @throws MisconfigurationException If a properties file is misconfigured */
-        fun load(): ServerDelegate {
-            val delegateName = GatewayConfiguration.delegate
+        fun load(configuration: BaseConfiguration): ServerDelegate {
+            val delegateName = configuration.delegate
             val log = getLogger {}
 
             val delegatesPackage = this::class.java.packageName
@@ -60,7 +62,13 @@ abstract class ServerDelegate {
                 if (!delegateClass.isSubclassOf(ServerDelegate::class))
                     throw IllegalArgumentException(CLASS_MUST_BE_SUBTYPE_OF(ServerDelegate::class, delegateClass))
 
-                return GatewayConfiguration.propertyFile.loadInto(delegateClass) as ServerDelegate
+                // Find constructor accepting only a GatewayConfiguration as an argument
+                val constructor = delegateClass.constructors.firstOrNull {
+                    it.parameters.size == 1 &&
+                            (it.parameters.first().type == BaseConfiguration::class.createType())
+                } ?: throw IllegalStateException("No valid constructors exist for class ${delegateClass.simpleName}")
+
+                return constructor.call(configuration) as ServerDelegate
             } catch (e: Exception) {
                 log.error { "Server delegate injection failed:" }
                 throw e
@@ -170,7 +178,7 @@ abstract class ServerDelegate {
             val handshake = Packet(
                 0,
                 Client.Handshake(
-                    protocolVersion = GatewayConfiguration.protocol.toInt(),
+                    protocolVersion = configuration.protocol.toInt(),
                     serverAddress = address,
                     serverPort = port.toUShort(),
                     nextState = Exchange.State.STATUS_REQUEST.ordinal)
@@ -216,8 +224,8 @@ abstract class ServerDelegate {
                     if (playerCount == 0) {
                         timeEmpty += now - lastCheckup
                         log.debug { "Time empty: $timeEmpty" }
-                        if (timeEmpty >= GatewayConfiguration.timeout) {
-                            log.debug { "Server has been empty for greater than ${GatewayConfiguration.timeout}" }
+                        if (timeEmpty >= configuration.timeout) {
+                            log.debug { "Server has been empty for greater than ${configuration.timeout}" }
                             log.debug { "Attempting to shut down" }
                             timeEmpty = Duration.ZERO
                             waitForServerToBe(STOPPED)
@@ -237,7 +245,7 @@ abstract class ServerDelegate {
     /** A job that loops forever, checking whether the server should be closed regularly as defined in `config.frequency`.
      * This function will not return until cancelled. */
     private suspend fun monitor() = coroutineScope {
-        val metronome = createMetronome(GatewayConfiguration.frequency)
+        val metronome = createMetronome(configuration.frequency)
         metronome.collect { checkup() }
     }
 

@@ -125,10 +125,11 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                     UNKNOWN -> state = getCurrentStatus()
                     STARTING,
                     STOPPING -> withTimeout(SERVER_TRANSITION_TIMEOUT) {
-                        do {
+                        state = getCurrentStatus()
+                        while (state in listOf(STARTING, STOPPING)) {
                             delay(SERVER_TRANSITION_PING_FREQUENCY)
                             state = getCurrentStatus()
-                        } while (state in listOf(STARTING, STOPPING))
+                        }
                     }
 
                     STOPPED,

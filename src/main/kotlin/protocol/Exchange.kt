@@ -1,7 +1,7 @@
 package com.nolanbarry.gateway.protocol
 
 import com.nolanbarry.gateway.delegates.ServerDelegate
-import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.STARTED
+import com.nolanbarry.gateway.delegates.ServerDelegate.ServerStatus.*
 import com.nolanbarry.gateway.model.*
 import com.nolanbarry.gateway.protocol.packet.*
 import com.nolanbarry.gateway.utils.getLogger
@@ -181,11 +181,14 @@ class Exchange(
             return response.payload.response
         } else {
             log.debug { "Server is offline, sending default offline status response" }
-            // Message will be cryptic if state is UNKNOWN
+            val message = when (currentState) {
+                STARTING -> "Server is currently starting up"
+                else -> "Server is stopped; be patient to allow for cold boot"
+            }
             return ServerState(
                 version = Version(name = "(Gated)", protocol = configuration.protocol.toInt()),
                 players = Players(max = 1, online = 0),
-                description = Chat(text = "Server is ${currentState.name.lowercase()}, connect to start.")
+                description = Chat(text = message)
             )
         }
     }

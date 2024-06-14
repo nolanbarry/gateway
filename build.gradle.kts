@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.nolanbarry"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 
 repositories {
     mavenCentral()

@@ -117,6 +117,7 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
         // solution to resolving that conflict.
         stateTransition.withLock {
 
+            val serverActionLock = Mutex()
             var serverActionAttempts = 0
 
             while (desiredState != state) {
@@ -142,9 +143,19 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                         }
                         serverActionAttempts++
                         state = if (state == STOPPED) STARTING else STOPPING
+                        serverActionLock.lock()
+                        launch {
+                            try {
+                                delay(BACKOFF)
+                            } finally {
+                                serverActionLock.unlock()
+                            }
+                        }
+
                         try {
                             if (action == "stop") stopServer() else startServer()
                         } catch (e: IncompatibleServerStateException) {
+                            log.debug(e) { "Failed to $action server, will try again" }
                             state = UNKNOWN
                         }
                     }

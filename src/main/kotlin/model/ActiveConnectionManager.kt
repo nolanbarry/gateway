@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.net.SocketException
 import kotlin.random.Random
 
 /** Once a client logs in, its connection to the server is managed here. This class forwards bytes between the two
@@ -38,8 +39,12 @@ object ActiveConnectionManager {
                     pipe(from = server.read, to = client.write)
                 }
             } catch (e: Throwable) {
-                if (e !is ClosedReceiveChannelException && e !is ClosedWriteChannelException)
-                    log.debug(e) { "Connection '$shortId' ended exceptionally" }
+                when (e) {
+                    is ClosedWriteChannelException,
+                    is ClosedReceiveChannelException,
+                    is SocketException -> Unit
+                    else -> log.debug(e) { "Connection '$shortId' ended exceptionally" }
+                }
             } finally {
                 log.debug { "Long-lasting connection '$shortId' closed" }
                 clients.remove(id)

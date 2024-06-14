@@ -135,20 +135,17 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                     STOPPED,
                     STARTED -> {
                         // Put the server in the next, intermediate state, then actually start/stop server asynchronously,
+                        val action = if (state == STOPPED) "start" else "stop"
                         if (serverActionAttempts >= MAX_SERVER_ACTION_ATTEMPTS) {
-                            val attemptedAction = if (state == STOPPED) "start" else "stop"
                             throw UnrecoverableServerException(
-                                FAILED_TO_DO_AFTER_X_ATTEMPTS(attemptedAction, MAX_SERVER_ACTION_ATTEMPTS))
+                                FAILED_TO_DO_AFTER_X_ATTEMPTS(action, MAX_SERVER_ACTION_ATTEMPTS))
                         }
                         serverActionAttempts++
                         state = if (state == STOPPED) STARTING else STOPPING
-                        launch {
-                            try {
-                                if (state == STOPPING) stopServer() else startServer()
-                            } catch (e: IncompatibleServerStateException) {
-                                delay(BACKOFF)
-                                state = UNKNOWN
-                            }
+                        try {
+                            if (action == "stop") stopServer() else startServer()
+                        } catch (e: IncompatibleServerStateException) {
+                            state = UNKNOWN
                         }
                     }
                 }

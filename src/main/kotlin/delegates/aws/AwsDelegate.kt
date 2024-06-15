@@ -62,7 +62,6 @@ class AwsDelegate(baseConfiguration: BaseConfiguration) : ServerDelegate(baseCon
                 if (mcServerRunning) {
                     ServerStatus.STARTED
                 } else {
-                    log.debug { "Instance is started, but MC server is not reachable" }
                     ServerStatus.STARTING
                 }
             }

@@ -200,7 +200,6 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
     /** Update internal knowledge of server state (player count) and stop server if `config.timeout` time has elapsed
      * with no players. */
     private suspend fun checkup(): Unit = coroutineScope {
-        log.debug { "Performing server checkup, current state is $state" }
         runCatching {
             when (state) {
                 UNKNOWN -> {
@@ -215,7 +214,6 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                 }
 
                 STOPPED, STOPPING, STARTING -> {
-                    log.debug { "Nothing to check" }
                     playerCount = 0
                     timeEmpty = Duration.ZERO
                 }
@@ -230,11 +228,11 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                             timeEmpty += now - lastCheckup
                             log.debug { "Time empty: $timeEmpty" }
                             if (timeEmpty >= configuration.timeout) {
-                                log.debug { "Server has been empty for greater than ${configuration.timeout}" }
-                                log.debug { "Attempting to shut down" }
+                                log.debug { "Server has been empty for greater than ${configuration.timeout}; " +
+                                        "attempting shut down" }
                                 timeEmpty = Duration.ZERO
                                 waitForServerToBe(STOPPED)
-                                log.debug { "Server stopped" }
+                                log.debug { "Server is stopped" }
                             }
                         } else timeEmpty = Duration.ZERO
                         lastCheckup = now
@@ -244,6 +242,7 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                                     "rerunning checkup"
                         }
                         state = UNKNOWN
+                        delay(BACKOFF)
                         checkup()
                     }
                 }
@@ -270,10 +269,8 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
     ): Boolean {
         val attempt = runCatching {
             val builder = aSocket(SOCKET_SELECTOR).tcp()
-            log.debug { "Checking if $address:$port is accepting connections" }
             withTimeout(timeout.inWholeMilliseconds) { builder.connect(address, port).close() }
         }
-        log.debug { "Connection to $address:$port ${if (attempt.isSuccess) "succeeded" else "failed"}" }
         return attempt.isSuccess
     }
 }

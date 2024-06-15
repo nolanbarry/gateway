@@ -142,7 +142,6 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                                 FAILED_TO_DO_AFTER_X_ATTEMPTS(action, MAX_SERVER_ACTION_ATTEMPTS))
                         }
                         serverActionAttempts++
-                        state = if (state == STOPPED) STARTING else STOPPING
                         serverActionLock.lock()
                         launch {
                             try {
@@ -153,6 +152,7 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                         }
 
                         try {
+                            state = if (state == STOPPED) STARTING else STOPPING
                             if (action == "stop") stopServer() else startServer()
                         } catch (e: IncompatibleServerStateException) {
                             log.debug(e) { "Failed to $action server, will try again" }

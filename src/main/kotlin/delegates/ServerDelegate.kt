@@ -200,17 +200,18 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
     /** Update internal knowledge of server state (player count) and stop server if `config.timeout` time has elapsed
      * with no players. */
     private suspend fun checkup(): Unit = coroutineScope {
-        runCatching {
+        val now = Clock.System.now()
+        try {
             when (state) {
                 UNKNOWN -> {
                     log.debug { "Attempting to retrieve updated state" }
                     state = getCurrentStatus()
                     if (state == UNKNOWN) {
                         log.debug { "Nothing changed, state is still $state" }
-                        return@runCatching
+                    } else {
+                        log.debug { "Server state updated to $state. Rerunning checkup" }
+                        checkup()
                     }
-                    log.debug { "Server state updated to $state. Rerunning checkup" }
-                    checkup()
                 }
 
                 STOPPED, STOPPING, STARTING -> {
@@ -222,20 +223,20 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                     try {
                         val status = getState()
                         playerCount = status.players.online
-                        val now = Clock.System.now()
                         log.debug { "Player count: $playerCount" }
                         if (playerCount == 0) {
                             timeEmpty += now - lastCheckup
                             log.debug { "Time empty: $timeEmpty" }
                             if (timeEmpty >= configuration.timeout) {
-                                log.debug { "Server has been empty for greater than ${configuration.timeout}; " +
-                                        "attempting shut down" }
+                                log.debug {
+                                    "Server has been empty for greater than ${configuration.timeout}; " +
+                                            "attempting shut down"
+                                }
                                 timeEmpty = Duration.ZERO
                                 waitForServerToBe(STOPPED)
                                 log.debug { "Server is stopped" }
                             }
                         } else timeEmpty = Duration.ZERO
-                        lastCheckup = now
                     } catch (e: Exception) {
                         log.warn {
                             "Server checkup failed - is the server really started? Putting state into UNKNOWN and" +
@@ -247,10 +248,10 @@ abstract class ServerDelegate(val configuration: BaseConfiguration) : Configurat
                     }
                 }
             }
-
-
-        }.onFailure { exception ->
-            log.error(exception) { "Server checkup failed." }
+        } catch (e: Exception) {
+            log.error(e) { "Server checkup failed." }
+        } finally {
+            lastCheckup = now
         }
     }
 
